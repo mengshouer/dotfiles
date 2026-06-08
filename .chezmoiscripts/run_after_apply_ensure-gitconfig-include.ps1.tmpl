@@ -1,0 +1,38 @@
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = "Stop"
+
+$gitconfig = Join-Path $HOME ".gitconfig"
+$basePath = Join-Path $HOME ".config\git\base.gitconfig"
+$includePath = "~/.config/git/base.gitconfig"
+
+if (-not (Test-Path -LiteralPath $basePath -PathType Leaf)) {
+    exit 0
+}
+
+if (Test-Path -LiteralPath $gitconfig -PathType Leaf) {
+    $content = Get-Content -LiteralPath $gitconfig -Raw
+    if ($null -eq $content) {
+        $content = ""
+    }
+    if ($content.Contains($includePath)) {
+        exit 0
+    }
+} else {
+    $parent = Split-Path -Parent $gitconfig
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $content = ""
+}
+
+$prefix = @(
+    "[include]",
+    "`tpath = $includePath"
+) -join [Environment]::NewLine
+
+if ($content.Length -gt 0) {
+    $newContent = $prefix + [Environment]::NewLine + [Environment]::NewLine + $content
+} else {
+    $newContent = $prefix + [Environment]::NewLine
+}
+
+$encoding = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllText($gitconfig, $newContent, $encoding)

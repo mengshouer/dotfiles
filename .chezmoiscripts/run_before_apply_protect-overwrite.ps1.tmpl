@@ -1,0 +1,106 @@
+# Confirm before chezmoi overwrites Windows files that have local extras.
+#
+# For each guarded managed file that exists on disk, compare it against the
+# rendered version chezmoi would write. If the on-disk file has lines the
+# rendered version does not, ask whether to save backups, skip backups, or
+# abort before apply continues.
+
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = "Stop"
+
+if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
+    exit 0
+}
+
+$guarded = @(
+    (Join-Path $HOME "Documents\PowerShell\Microsoft.PowerShell_profile.ps1"),
+    (Join-Path $HOME "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"),
+    (Join-Path $HOME ".config\starship.toml")
+)
+
+$backupDir = Join-Path $HOME ".config\dotfiles\lost-and-found"
+New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+$timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$report = @()
+$extraItems = @()
+
+foreach ($target in $guarded) {
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        continue
+    }
+
+    $canonical = & chezmoi cat $target 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $canonical) {
+        continue
+    }
+
+    $current = Get-Content -LiteralPath $target
+    $extras = @(Compare-Object -ReferenceObject $canonical -DifferenceObject $current |
+        Where-Object { $_.SideIndicator -eq "=>" } |
+        ForEach-Object { [string]$_.InputObject } |
+        Where-Object { $_.Trim().Length -gt 0 })
+
+    if (-not $extras) {
+        continue
+    }
+
+    $backupFile = Join-Path $backupDir ("{0}-extras-{1}.txt" -f (Split-Path -Leaf $target), $timestamp)
+    $extraItems += [pscustomobject]@{
+        Target = $target
+        Extras = $extras
+        BackupFile = $backupFile
+    }
+    $report += "  $target  (+$($extras.Count) lines)  ->  $backupFile"
+}
+
+if ($report.Count -eq 0) {
+    exit 0
+}
+
+[Console]::Error.WriteLine(@"
+
+==============================================================
+  chezmoi apply will OVERWRITE files that have local extras:
+$($report -join [Environment]::NewLine)
+
+  Choose:
+    y  continue and save backups under:
+    $backupDir
+    s  skip backups and continue
+    n  abort without applying
+
+  Common cause: installers or editors appended to PowerShell profiles.
+  To keep that content across applies, move it to:
+    ~/.config/dotfiles/local.ps1   (auto-sourced by PowerShell profiles)
+    ~/.config/dotfiles/local.env   (KEY=VALUE env vars)
+    ~/.gitconfig                   (mutable Git config via git config --global)
+    ~/.config/git/ignore.local     (extra global Git ignore rules)
+
+==============================================================
+"@)
+
+$answer = Read-Host "Continue with chezmoi apply and overwrite these files? [y/s/N]"
+switch ($answer) {
+    { $_ -in @("y", "Y", "yes", "YES") } {
+        New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+        foreach ($item in $extraItems) {
+            $backup = @(
+                "# Extras from $($item.Target) captured at $timestamp",
+                "# These lines exist on disk but NOT in the chezmoi-managed version.",
+                "# They will be lost when chezmoi apply overwrites $($item.Target).",
+                "#",
+                "# To keep them, move into ~/.config/dotfiles/local.ps1,",
+                "# ~/.config/dotfiles/local.env, or ~/.config/git/user.local.",
+                "# ---"
+            ) + $item.Extras
+
+            Set-Content -LiteralPath $item.BackupFile -Value $backup -Encoding UTF8
+        }
+        exit 0
+    }
+    { $_ -in @("s", "S", "skip", "SKIP") } { exit 0 }
+    default {
+        [Console]::Error.WriteLine("Aborting chezmoi apply. No files were changed.")
+        exit 1
+    }
+}

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Confirm before chezmoi overwrites files that have local extras.
+#
+# For each managed file that exists on disk: diff against the canonical
+# (rendered) version chezmoi would write. If the on-disk file has lines
+# the canonical version does not, print them and ask whether to save backups,
+# skip backups, or abort before allowing apply to proceed.
+#
+# Skip in non-interactive contexts (CI, scripted runs) so unattended apply
+# still works.
+
+set -euo pipefail
+
+# Bail in non-interactive shells. tty check covers most CI / scripted callers.
+if [[ ! -t 0 ]] || [[ ! -t 1 ]]; then
+  exit 0
+fi
+
+# Files to guard. Add more here as the repo grows.
+guarded=(
+  "$HOME/.zshrc"
+  "$HOME/.zshenv"
+  "$HOME/.zimrc"
+  "$HOME/.config/starship.toml"
+)
+
+backup_dir="$HOME/.config/dotfiles/lost-and-found"
+mkdir -p "$backup_dir"
+ts="$(date -u +%Y%m%dT%H%M%SZ)"
+
+any_extras=0
+report=""
+extra_targets=()
+extra_backups=()
+extra_payloads=()
+
+for target in "${guarded[@]}"; do
+  [[ -f "$target" ]] || continue
+
+  canonical="$(chezmoi cat "$target" 2>/dev/null || true)"
+  [[ -n "$canonical" ]] || continue
+
+  extras="$(diff <(printf '%s' "$canonical") "$target" 2>/dev/null \
+    | sed -n 's/^> //p' \
+    | sed '/^[[:space:]]*$/d' \
+    || true)"
+
+  [[ -n "$extras" ]] || continue
+
+  any_extras=1
+  count="$(printf '%s\n' "$extras" | wc -l | tr -d ' ')"
+  backup_file="$backup_dir/$(basename "$target")-extras-$ts.txt"
+
+  extra_targets+=("$target")
+  extra_backups+=("$backup_file")
+  extra_payloads+=("$extras")
+
+  report+=$'\n'"  $target  (+$count lines)  →  $backup_file"
+done
+
+if (( ! any_extras )); then
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+==============================================================
+  ⚠  chezmoi apply will OVERWRITE files that have local extras:
+$report
+
+  Choose:
+    y  continue and save backups under:
+    $backup_dir/
+    s  skip backups and continue
+    n  abort without applying
+
+  Common cause: installers (conda, rustup, vendor SDKs) appended
+  to ~/.zshrc. To keep that content across applies, move it to:
+    ~/.config/dotfiles/local.zsh   (auto-sourced every shell)
+    ~/.config/dotfiles/local.env   (KEY=VALUE env vars)
+    ~/.gitconfig                   (mutable Git config via git config --global)
+    ~/.config/git/ignore.local     (extra global Git ignore rules)
+
+==============================================================
+EOF
+
+printf 'Continue with chezmoi apply and overwrite these files? [y/s/N] ' >&2
+read -r answer < /dev/tty
+
+case "${answer:-}" in
+  y|Y|yes|YES)
+    mkdir -p "$backup_dir"
+    for i in "${!extra_targets[@]}"; do
+      {
+        printf '# Extras from %s captured at %s\n' "${extra_targets[$i]}" "$ts"
+        printf '# These lines exist on disk but NOT in the chezmoi-managed version.\n'
+        printf '# They will be lost when chezmoi apply overwrites %s.\n' "${extra_targets[$i]}"
+        printf '#\n'
+        printf '# To keep them, move into ~/.config/dotfiles/local.zsh (or another\n'
+        printf '# local override file), then re-run chezmoi apply.\n'
+        printf '# ---\n'
+        printf '%s\n' "${extra_payloads[$i]}"
+      } > "${extra_backups[$i]}"
+    done
+    exit 0
+    ;;
+  s|S|skip|SKIP) exit 0 ;;
+  *)
+    printf 'Aborting chezmoi apply. No files were changed.\n' >&2
+    exit 1
+    ;;
+esac

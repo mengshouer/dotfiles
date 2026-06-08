@@ -1,0 +1,29 @@
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
+!.env.example
+
+.ssh
+.gnupg
+.password-store
+
+.zsh_history
+.zhistory
+ConsoleHost_history.txt
+
+.codex
+.claude
+.omx
+.omc
+
+{{- $local := joinPath .chezmoi.homeDir ".config/git/ignore.local" }}
+{{- if stat $local }}
+
+# --- begin local rules from ~/.config/git/ignore.local ---
+{{ include $local }}
+{{- if not (hasSuffix "\n" (include $local)) }}
+{{ end }}
+# --- end local rules ---
+{{- end }}

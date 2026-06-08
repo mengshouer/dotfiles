@@ -1,0 +1,85 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+format = "$directory$git_branch$git_status$nodejs$python$rust$bun$character"
+
+add_newline = false
+
+scan_timeout = 30
+command_timeout = 1000
+
+# =========================================================
+# DIRECTORY
+# =========================================================
+
+[directory]
+style = "fg:67"
+format = '[\[$path\]]($style)'
+
+truncation_length = 3
+truncation_symbol = "../"
+
+[directory.substitutions]
+"Documents" = "Docs"
+"Downloads" = "Down"
+"Music" = "Music"
+"Pictures" = "Pics"
+
+# =========================================================
+# GIT
+# =========================================================
+
+[git_branch]
+symbol = "🌱 "
+style = "fg:107"
+format = '[\[$symbol$branch\]]($style)'
+
+[git_status]
+style = "fg:107"
+format = '([\[$all_status$ahead_behind\]]($style))'
+conflicted = "="
+ahead = "⇡${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+behind = "⇣${count}"
+up_to_date = ""
+untracked = "?"
+stashed = '\$'
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "x"
+
+# =========================================================
+# LANGUAGES
+# =========================================================
+
+[nodejs]
+symbol = "[⬢](bold green) "
+style = "fg:67"
+format = '[\[$symbol$version\]]($style)'
+detect_files = ["package.json", ".node-version", ".nvmrc"]
+detect_folders = []
+detect_extensions = []
+
+[python]
+symbol = "🐍 "
+style = "fg:67"
+format = '[\[$symbol$version\]]($style)'
+
+[rust]
+symbol = "🦀 "
+style = "fg:67"
+format = '[\[$symbol$version\]]($style)'
+
+[bun]
+symbol = "🥟 "
+style = "fg:67"
+format = '[\[$symbol$version\]]($style)'
+
+# =========================================================
+# CHARACTER
+# =========================================================
+
+[character]
+success_symbol = '[>](fg:67)'
+error_symbol = '[>](fg:167)'
+vimcmd_symbol = '[<](fg:107)'
