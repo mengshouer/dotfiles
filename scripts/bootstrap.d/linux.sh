@@ -152,7 +152,10 @@ install_fnm() {
     return 0
   fi
 
-  say "fnm is not installed. Install it manually; bootstrap does not run fnm curl installers."
+  say ""
+  say "fnm is not installed. Run the following command to install it:"
+  say "  curl -fsSL https://fnm.vercel.app/install | bash"
+  say ""
 }
 
 install_uv() {
@@ -168,11 +171,10 @@ install_uv() {
     return 0
   fi
 
-  local bin_dir
-  bin_dir="$(bootstrap_bin_dir)"
-  say "Installing uv with the official installer."
-  run mkdir -p "$bin_dir"
-  run sh -c 'curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR="$1" sh' sh "$bin_dir"
+  say ""
+  say "uv is not installed. Run the following command to install it:"
+  say "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+  say ""
 }
 
 case "$layer" in

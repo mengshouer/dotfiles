@@ -96,6 +96,13 @@ bootstrap_prepare_path() {
   path_prepend "$HOME/.local/bin"
   path_prepend "${XDG_BIN_HOME:-}"
   path_prepend "$(bootstrap_bin_dir)"
+
+  local fnm_dir
+  case "$(uname -s)" in
+    Darwin) fnm_dir="${XDG_DATA_HOME:-$HOME/Library/Application Support}/fnm" ;;
+    *)      fnm_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fnm" ;;
+  esac
+  path_prepend "$fnm_dir"
 }
 
 update_source_repo() {
