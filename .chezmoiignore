@@ -14,8 +14,8 @@ scripts/**
 .chezmoiscripts/apply_protect-overwrite.sh
 .chezmoiscripts/apply_ensure-gitconfig-include.sh
 {{ else }}
-Documents/PowerShell/Microsoft.PowerShell_profile.ps1
-Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1
+Documents
+Documents/**
 .config/dotfiles/pwsh
 .config/dotfiles/pwsh/**
 .chezmoiscripts/apply_protect-overwrite.ps1
