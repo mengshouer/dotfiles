@@ -29,6 +29,7 @@ alias c="code ."
 alias d="docker"
 alias dc="docker compose"
 
+alias py="python"
 alias uvpy="uv run python"
 alias uvpip="uv pip"
 

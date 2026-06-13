@@ -30,6 +30,7 @@ $aliases = [ordered]@{
     d     = "docker"
     dc    = "docker compose"
 
+    py    = "python"
     uvpy  = "uv run python"
     uvpip = "uv pip"
 
