@@ -180,7 +180,7 @@ print_manual_chezmoi_steps() {
   say "  chezmoi diff  # optional: review changes before apply"
   say "  chezmoi apply"
   if [[ "${bootstrap_zimfw_pending:-0}" == "1" ]]; then
-    say "  scripts/bootstrap terminal --update  # finish zimfw setup after apply"
+    say "  bash scripts/bootstrap terminal --update  # finish zimfw setup after apply"
   fi
 }
 
