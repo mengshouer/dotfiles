@@ -179,6 +179,7 @@ print_manual_chezmoi_steps() {
   fi
   say "  chezmoi diff  # optional: review changes before apply"
   say "  chezmoi apply"
+  say "  bash scripts/bootstrap terminal --set-shell  # optional: set zsh as default shell"
   if [[ "${bootstrap_zimfw_pending:-0}" == "1" ]]; then
     say "  bash scripts/bootstrap terminal --update  # finish zimfw setup after apply"
   fi

@@ -59,6 +59,6 @@ if [[ "$layer" == "terminal" ]]; then
 fi
 
 set_shell_if_requested
-if (( ! update )); then
+if (( ! update && ! set_shell )); then
   print_manual_chezmoi_steps
 fi
