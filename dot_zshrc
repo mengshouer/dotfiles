@@ -2,6 +2,17 @@
 
 [[ $- == *i* ]] || return 0
 
+if (( EUID == 0 )); then
+  dotfiles_home=~root
+  dotfiles_config_home="$dotfiles_home/.config"
+  dotfiles_cache_home="$dotfiles_home/.cache"
+  unset DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE
+else
+  dotfiles_home="$HOME"
+  dotfiles_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+  dotfiles_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+fi
+
 dotfiles_load_env_file() {
   local env_file="$1"
   local line key value
@@ -18,9 +29,9 @@ dotfiles_load_env_file() {
   done < "$env_file"
 }
 
-dotfiles_load_env_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.env"
+dotfiles_load_env_file "$dotfiles_config_home/dotfiles/local.env"
 
-dotfiles_zsh_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/zsh"
+dotfiles_zsh_dir="$dotfiles_config_home/dotfiles/zsh"
 dotfiles_zsh_early_path_file="$dotfiles_zsh_dir/05-path.zsh"
 
 zsh_path_prepend() {
@@ -37,12 +48,12 @@ ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 ZSH_AUTOSUGGEST_USE_ASYNC=1
 ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 
-ZIM_HOME="${ZDOTDIR:-$HOME}/.zim"
-ZSH_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+ZIM_HOME="${ZDOTDIR:-$dotfiles_home}/.zim"
+ZSH_CACHE_DIR="$dotfiles_cache_home/zsh"
 [[ -d "$ZSH_CACHE_DIR" ]] || command mkdir -p "$ZSH_CACHE_DIR"
 zstyle ':zim:completion' dumpfile "$ZSH_CACHE_DIR/.zcompdump"
 
-zimrc_file="${ZIM_CONFIG_FILE:-${ZDOTDIR:-$HOME}/.zimrc}"
+zimrc_file="${ZIM_CONFIG_FILE:-${ZDOTDIR:-$dotfiles_home}/.zimrc}"
 zimfw_file="$ZIM_HOME/zimfw.zsh"
 zim_init_file="$ZIM_HOME/init.zsh"
 
@@ -61,5 +72,5 @@ if [[ -d "$dotfiles_zsh_dir" ]]; then
   done
 fi
 
-unset dotfiles_zsh_early_path_file dotfiles_zsh_file dotfiles_zsh_dir zim_init_file zimfw_file zimrc_file
+unset dotfiles_cache_home dotfiles_config_home dotfiles_home dotfiles_zsh_early_path_file dotfiles_zsh_file dotfiles_zsh_dir zim_init_file zimfw_file zimrc_file
 unfunction dotfiles_load_env_file
