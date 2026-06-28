@@ -60,12 +60,13 @@ apt_install() {
 }
 
 brew_formula_installed() {
-  have brew && brew list --formula "$1" >/dev/null 2>&1
+  have_usable_brew && brew list --formula "$1" >/dev/null 2>&1
 }
 
 brew_install_formula() {
   local package="$1"
 
+  have_usable_brew || return 1
   brew_formula_installed "$package" && return 0
   run brew install "$package"
 }
@@ -76,7 +77,7 @@ install_brew_or_apt_package() {
 
   have "$command_name" && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula "$package"
     return 0
   fi
@@ -87,7 +88,7 @@ install_brew_or_apt_package() {
 install_chezmoi() {
   have chezmoi && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula chezmoi
     return 0
   fi
@@ -107,7 +108,7 @@ install_chezmoi() {
 install_starship() {
   have starship && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula starship
     return 0
   fi
@@ -122,7 +123,7 @@ install_starship() {
 install_zoxide() {
   have zoxide && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula zoxide
     return 0
   fi
@@ -142,7 +143,7 @@ install_zoxide() {
 install_fnm() {
   have fnm && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula fnm
     return 0
   fi
@@ -161,7 +162,7 @@ install_fnm() {
 install_uv() {
   have uv && return 0
 
-  if have brew; then
+  if have_usable_brew; then
     brew_install_formula uv
     return 0
   fi
@@ -181,7 +182,7 @@ case "$layer" in
   terminal)
     install_brew_or_apt_package curl
     install_brew_or_apt_package git
-    if ! have brew && is_debian_like; then
+    if ! have_usable_brew && is_debian_like; then
       apt_install ca-certificates
     fi
     install_chezmoi

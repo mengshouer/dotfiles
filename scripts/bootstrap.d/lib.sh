@@ -36,6 +36,23 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+have_usable_brew() {
+  (( EUID != 0 )) && have brew
+}
+
+bootstrap_root_home() {
+  printf '%s\n' ~root
+}
+
+bootstrap_prepare_root_environment() {
+  (( EUID == 0 )) || return 0
+
+  HOME="$(bootstrap_root_home)"
+  export HOME
+
+  unset DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE
+}
+
 run_as_root() {
   if (( EUID == 0 )); then
     run "$@"
@@ -64,6 +81,40 @@ path_prepend() {
   export PATH
 }
 
+path_remove_patterns() {
+  local entry new_path old_ifs pattern
+
+  (($#)) || return 0
+
+  new_path=""
+  old_ifs="$IFS"
+  IFS=:
+  for entry in $PATH; do
+    for pattern in "$@"; do
+      case "$entry" in
+        $pattern) continue 2 ;;
+      esac
+    done
+
+    new_path="${new_path:+$new_path:}$entry"
+  done
+  IFS="$old_ifs"
+
+  PATH="$new_path"
+  export PATH
+}
+
+bootstrap_remove_root_unsafe_paths() {
+  path_remove_patterns \
+    "/home/*" \
+    "/Users/*" \
+    "/opt/homebrew/bin" \
+    "/opt/homebrew/sbin"
+
+  [[ "${OSTYPE:-}" == darwin* ]] && path_remove_patterns "/usr/local/bin" "/usr/local/sbin"
+  return 0
+}
+
 path_contains_dir() {
   local search_path="$1"
   local dir="$2"
@@ -77,6 +128,11 @@ path_contains_dir() {
 }
 
 bootstrap_bin_dir() {
+  if (( EUID == 0 )); then
+    printf '%s\n' "$(bootstrap_root_home)/.local/bin"
+    return 0
+  fi
+
   if [[ -n "${DOTFILES_BOOTSTRAP_BIN_DIR:-}" ]]; then
     printf '%s\n' "$DOTFILES_BOOTSTRAP_BIN_DIR"
   elif [[ -n "${XDG_BIN_HOME:-}" ]]; then
@@ -87,19 +143,36 @@ bootstrap_bin_dir() {
 }
 
 bootstrap_prepare_path() {
+  bootstrap_prepare_root_environment
   bootstrap_original_path="${bootstrap_original_path:-${PATH:-}}"
 
-  path_prepend "/home/linuxbrew/.linuxbrew/bin"
-  path_prepend "/usr/local/bin"
-  path_prepend "/opt/homebrew/bin"
+  if (( EUID == 0 )); then
+    local fnm_dir root_home
+    root_home="$(bootstrap_root_home)"
+    bootstrap_remove_root_unsafe_paths
+    path_prepend "$root_home/bin"
+    path_prepend "$root_home/.local/bin"
+
+    case "${OSTYPE:-}" in
+      darwin*) fnm_dir="$root_home/Library/Application Support/fnm" ;;
+      *)      fnm_dir="$root_home/.local/share/fnm" ;;
+    esac
+    path_prepend "$fnm_dir"
+    bootstrap_remove_root_unsafe_paths
+    return 0
+  else
+    path_prepend "/home/linuxbrew/.linuxbrew/bin"
+    path_prepend "/usr/local/bin"
+    path_prepend "/opt/homebrew/bin"
+  fi
   path_prepend "$HOME/bin"
   path_prepend "$HOME/.local/bin"
   path_prepend "${XDG_BIN_HOME:-}"
   path_prepend "$(bootstrap_bin_dir)"
 
   local fnm_dir
-  case "$(uname -s)" in
-    Darwin) fnm_dir="${XDG_DATA_HOME:-$HOME/Library/Application Support}/fnm" ;;
+  case "${OSTYPE:-}" in
+    darwin*) fnm_dir="${XDG_DATA_HOME:-$HOME/Library/Application Support}/fnm" ;;
     *)      fnm_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fnm" ;;
   esac
   path_prepend "$fnm_dir"

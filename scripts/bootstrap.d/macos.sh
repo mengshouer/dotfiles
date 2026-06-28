@@ -20,11 +20,17 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 source "$script_dir/lib.sh"
 bootstrap_parse_args "$@"
+
+if (( EUID == 0 )); then
+  printf 'Homebrew cannot be used as root. Run macOS bootstrap as a normal user.\n' >&2
+  exit 1
+fi
+
 bootstrap_prepare_path
 update_source_repo "$repo_root"
 
 ensure_brew() {
-  if have brew; then
+  if have_usable_brew; then
     return 0
   fi
 
