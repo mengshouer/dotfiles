@@ -40,17 +40,22 @@ have_usable_brew() {
   (( EUID != 0 )) && have brew
 }
 
-bootstrap_root_home() {
-  printf '%s\n' ~root
-}
-
 bootstrap_prepare_root_environment() {
   (( EUID == 0 )) || return 0
 
-  HOME="$(bootstrap_root_home)"
+  HOME=~root
   export HOME
 
-  unset DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE
+  # Shared installs must stay world-readable regardless of root's umask.
+  umask 022
+
+  # Drop env vars leaked from a normal user's session; keep root's own values.
+  local var
+  for var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE; do
+    case "${!var:-}" in
+      /home/*|/Users/*) unset "$var" ;;
+    esac
+  done
 }
 
 run_as_root() {
@@ -105,13 +110,21 @@ path_remove_patterns() {
 }
 
 bootstrap_remove_root_unsafe_paths() {
+  # Drop empty/relative entries, then user-writable locations. Keep in sync
+  # with the root branch of dot_config/dotfiles/zsh/05-path.zsh.
   path_remove_patterns \
+    "" \
+    "[!/]*" \
     "/home/*" \
     "/Users/*" \
+    "/tmp" \
+    "/tmp/*" \
+    "/var/tmp" \
+    "/var/tmp/*" \
     "/opt/homebrew/bin" \
     "/opt/homebrew/sbin"
 
-  [[ "${OSTYPE:-}" == darwin* ]] && path_remove_patterns "/usr/local/bin" "/usr/local/sbin"
+  [[ -x /usr/local/bin/brew ]] && path_remove_patterns "/usr/local/bin" "/usr/local/sbin"
   return 0
 }
 
@@ -128,13 +141,11 @@ path_contains_dir() {
 }
 
 bootstrap_bin_dir() {
-  if (( EUID == 0 )); then
-    printf '%s\n' "$(bootstrap_root_home)/.local/bin"
-    return 0
-  fi
-
   if [[ -n "${DOTFILES_BOOTSTRAP_BIN_DIR:-}" ]]; then
     printf '%s\n' "$DOTFILES_BOOTSTRAP_BIN_DIR"
+  elif (( EUID == 0 )); then
+    # Root installs shared tools for all users.
+    printf '%s\n' /usr/local/bin
   elif [[ -n "${XDG_BIN_HOME:-}" ]]; then
     printf '%s\n' "$XDG_BIN_HOME"
   else
@@ -147,19 +158,7 @@ bootstrap_prepare_path() {
   bootstrap_original_path="${bootstrap_original_path:-${PATH:-}}"
 
   if (( EUID == 0 )); then
-    local fnm_dir root_home
-    root_home="$(bootstrap_root_home)"
     bootstrap_remove_root_unsafe_paths
-    path_prepend "$root_home/bin"
-    path_prepend "$root_home/.local/bin"
-
-    case "${OSTYPE:-}" in
-      darwin*) fnm_dir="$root_home/Library/Application Support/fnm" ;;
-      *)      fnm_dir="$root_home/.local/share/fnm" ;;
-    esac
-    path_prepend "$fnm_dir"
-    bootstrap_remove_root_unsafe_paths
-    return 0
   else
     path_prepend "/home/linuxbrew/.linuxbrew/bin"
     path_prepend "/usr/local/bin"
@@ -201,16 +200,15 @@ install_zimfw() {
   local zimrc_file="${ZIM_CONFIG_FILE:-${ZDOTDIR:-$HOME}/.zimrc}"
   local init_file="$zim_home/init.zsh"
 
-  if [[ ! -f "$zimrc_file" ]]; then
-    bootstrap_zimfw_pending=1
-    say "No .zimrc found at $zimrc_file. Run chezmoi apply, then rerun terminal bootstrap."
-    return 0
-  fi
-
   if [[ ! -f "$zimfw_file" ]]; then
     run mkdir -p "$zim_home"
     run curl -fsSL --create-dirs -o "$zimfw_file" \
       https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
+  fi
+
+  if [[ ! -f "$zimrc_file" ]]; then
+    say "No .zimrc found at $zimrc_file. zimfw finishes setup on first zsh launch after chezmoi apply."
+    return 0
   fi
 
   if [[ -f "$zimfw_file" ]]; then
@@ -253,9 +251,6 @@ print_manual_chezmoi_steps() {
   say "  chezmoi diff  # optional: review changes before apply"
   say "  chezmoi apply"
   say "  bash scripts/bootstrap terminal --set-shell  # optional: set zsh as default shell"
-  if [[ "${bootstrap_zimfw_pending:-0}" == "1" ]]; then
-    say "  bash scripts/bootstrap terminal --update  # finish zimfw setup after apply"
-  fi
 }
 
 set_shell_if_requested() {

@@ -4,18 +4,14 @@ typeset -U path PATH
 
 if (( EUID == 0 )); then
   root_home="${dotfiles_home:-}"
-  if [[ -z "$root_home" ]]; then
-    root_home=~root
-  fi
+  [[ -n "$root_home" ]] || root_home=~root
 
-  path=("${path[@]:#/home/*}")
-  path=("${path[@]:#/Users/*}")
-  path=("${path[@]:#/opt/homebrew/bin}")
-  path=("${path[@]:#/opt/homebrew/sbin}")
-  if [[ "$OSTYPE" == darwin* ]]; then
-    path=("${path[@]:#/usr/local/bin}")
-    path=("${path[@]:#/usr/local/sbin}")
-  fi
+  # Drop unsafe inherited entries. Keep in sync with
+  # bootstrap_remove_root_unsafe_paths in scripts/bootstrap.d/lib.sh.
+  path=("${(M)path[@]:#/*}")
+  path=("${path[@]:#(/home|/Users|/tmp|/var/tmp)(|/*)}")
+  path=("${path[@]:#/opt/homebrew/(bin|sbin)}")
+  [[ -x /usr/local/bin/brew ]] && path=("${path[@]:#/usr/local/(bin|sbin)}")
 
   zsh_path_prepend "$root_home/bin"
   zsh_path_prepend "$root_home/.local/bin"

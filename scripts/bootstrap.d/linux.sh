@@ -13,6 +13,8 @@ Layers:
 Flags:
   --set-shell   opt in to chsh -s "$(command -v zsh)"
   --update      git pull --ff-only, apply dotfiles, update zimfw
+
+Run as root to install shared tools into /usr/local/bin for all users.
 EOF
 }
 
@@ -155,7 +157,11 @@ install_fnm() {
 
   say ""
   say "fnm is not installed. Run the following command to install it:"
-  say "  curl -fsSL https://fnm.vercel.app/install | bash"
+  if (( EUID == 0 )); then
+    say "  curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /usr/local/bin --skip-shell"
+  else
+    say "  curl -fsSL https://fnm.vercel.app/install | bash"
+  fi
   say ""
 }
 
@@ -174,7 +180,11 @@ install_uv() {
 
   say ""
   say "uv is not installed. Run the following command to install it:"
-  say "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+  if (( EUID == 0 )); then
+    say "  curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
+  else
+    say "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+  fi
   say ""
 }
 
