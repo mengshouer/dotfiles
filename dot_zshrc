@@ -4,14 +4,18 @@
 
 if (( EUID == 0 )); then
   dotfiles_home=~root
-  dotfiles_config_home="$dotfiles_home/.config"
-  dotfiles_cache_home="$dotfiles_home/.cache"
-  unset DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE
+  # Drop env vars leaked from a normal user's session; keep root's own values.
+  for dotfiles_env_var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE; do
+    case "${(P)dotfiles_env_var}" in
+      /home/*|/Users/*) unset "$dotfiles_env_var" ;;
+    esac
+  done
+  unset dotfiles_env_var
 else
   dotfiles_home="$HOME"
-  dotfiles_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-  dotfiles_cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
 fi
+dotfiles_config_home="${XDG_CONFIG_HOME:-$dotfiles_home/.config}"
+dotfiles_cache_home="${XDG_CACHE_HOME:-$dotfiles_home/.cache}"
 
 dotfiles_load_env_file() {
   local env_file="$1"
@@ -29,6 +33,7 @@ dotfiles_load_env_file() {
   done < "$env_file"
 }
 
+# XDG_* exported from local.env do not affect the dotfiles paths resolved above.
 dotfiles_load_env_file "$dotfiles_config_home/dotfiles/local.env"
 
 dotfiles_zsh_dir="$dotfiles_config_home/dotfiles/zsh"
