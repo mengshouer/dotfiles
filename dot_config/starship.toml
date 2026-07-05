@@ -1,28 +1,42 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-format = "$directory$git_branch$git_status$nodejs$python$rust$bun$character"
+format = "${custom.su_user}$directory$git_branch$git_state$git_status$nodejs$python$rust$bun$character"
 
 add_newline = false
 
 scan_timeout = 30
 command_timeout = 1000
 
+palette = "main"
+
+[palettes.main]
+info = "67"     # directory, languages, normal prompt
+ok = "107"      # git normal states
+alert = "167"   # errors, in-progress git operations
+
+# =========================================================
+# IDENTITY (shown only when root, or after su/sudo -i)
+# =========================================================
+
+[custom.su_user]
+description = "Show username only when root or switched away from the login user"
+command = "id -un"
+when = '[ "$(id -u)" -eq 0 ] || [ "$(id -un)" != "${LOGNAME:-$(id -un)}" ]'
+shell = ["sh"]
+style = "fg:alert"
+format = '[\[$output\]]($style)'
+os = "unix"
+
 # =========================================================
 # DIRECTORY
 # =========================================================
 
 [directory]
-style = "fg:67"
+style = "fg:info"
 format = '[\[$path\]]($style)'
 
 truncation_length = 3
 truncation_symbol = "../"
-
-[directory.substitutions]
-"Documents" = "Docs"
-"Downloads" = "Down"
-"Music" = "Music"
-"Pictures" = "Pics"
 
 # =========================================================
 # GIT
@@ -30,11 +44,15 @@ truncation_symbol = "../"
 
 [git_branch]
 symbol = "🌱 "
-style = "fg:107"
+style = "fg:ok"
 format = '[\[$symbol$branch\]]($style)'
 
+[git_state]
+style = "fg:alert"
+format = '[\[$state( $progress_current/$progress_total)\]]($style)'
+
 [git_status]
-style = "fg:107"
+style = "fg:ok"
 format = '([\[$all_status$ahead_behind\]]($style))'
 conflicted = "="
 ahead = "⇡${count}"
@@ -54,7 +72,7 @@ deleted = "x"
 
 [nodejs]
 symbol = "[⬢](bold green) "
-style = "fg:67"
+style = "fg:info"
 format = '[\[$symbol$version\]]($style)'
 detect_files = ["package.json", ".node-version", ".nvmrc"]
 detect_folders = []
@@ -62,17 +80,17 @@ detect_extensions = []
 
 [python]
 symbol = "🐍 "
-style = "fg:67"
-format = '[\[$symbol$version\]]($style)'
+style = "fg:info"
+format = '[\[$symbol$version( $virtualenv)\]]($style)'
 
 [rust]
 symbol = "🦀 "
-style = "fg:67"
+style = "fg:info"
 format = '[\[$symbol$version\]]($style)'
 
 [bun]
 symbol = "🥟 "
-style = "fg:67"
+style = "fg:info"
 format = '[\[$symbol$version\]]($style)'
 
 # =========================================================
@@ -80,6 +98,6 @@ format = '[\[$symbol$version\]]($style)'
 # =========================================================
 
 [character]
-success_symbol = '[>](fg:67)'
-error_symbol = '[>](fg:167)'
-vimcmd_symbol = '[<](fg:107)'
+success_symbol = '[>](fg:info)'
+error_symbol = '[>](fg:alert)'
+vimcmd_symbol = '[<](fg:ok)'
