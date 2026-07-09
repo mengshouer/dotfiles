@@ -21,36 +21,55 @@ $guarded = @(
 $backupDir = Join-Path $HOME ".config\dotfiles\lost-and-found"
 New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$canonicalFile = New-TemporaryFile
 $report = @()
 $extraItems = @()
 
-foreach ($target in $guarded) {
-    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-        continue
-    }
+try {
+    foreach ($target in $guarded) {
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            continue
+        }
 
-    $canonical = & chezmoi cat $target 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $canonical) {
-        continue
-    }
+        & chezmoi cat --output $canonicalFile.FullName $target 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            continue
+        }
 
-    $current = Get-Content -LiteralPath $target
-    $extras = @(Compare-Object -ReferenceObject $canonical -DifferenceObject $current |
-        Where-Object { $_.SideIndicator -eq "=>" } |
-        ForEach-Object { [string]$_.InputObject } |
-        Where-Object { $_.Trim().Length -gt 0 })
+        $canonical = @(Get-Content -LiteralPath $canonicalFile.FullName -Encoding UTF8)
+        $current = @(Get-Content -LiteralPath $target -Encoding UTF8)
+        $canonicalCounts = New-Object System.Collections.Hashtable ([System.StringComparer]::Ordinal)
+        foreach ($line in $canonical) {
+            if ($canonicalCounts.ContainsKey($line)) {
+                $canonicalCounts[$line] = [int]$canonicalCounts[$line] + 1
+            } else {
+                $canonicalCounts[$line] = 1
+            }
+        }
 
-    if (-not $extras) {
-        continue
-    }
+        $extras = @()
+        foreach ($line in $current) {
+            if ($canonicalCounts.ContainsKey($line) -and [int]$canonicalCounts[$line] -gt 0) {
+                $canonicalCounts[$line] = [int]$canonicalCounts[$line] - 1
+            } elseif ($line.Trim().Length -gt 0) {
+                $extras += [string]$line
+            }
+        }
 
-    $backupFile = Join-Path $backupDir ("{0}-extras-{1}.txt" -f (Split-Path -Leaf $target), $timestamp)
-    $extraItems += [pscustomobject]@{
-        Target = $target
-        Extras = $extras
-        BackupFile = $backupFile
+        if (-not $extras) {
+            continue
+        }
+
+        $backupFile = Join-Path $backupDir ("{0}-extras-{1}.txt" -f (Split-Path -Leaf $target), $timestamp)
+        $extraItems += [pscustomobject]@{
+            Target = $target
+            Extras = $extras
+            BackupFile = $backupFile
+        }
+        $report += "  $target  (+$($extras.Count) lines)  ->  $backupFile"
     }
-    $report += "  $target  (+$($extras.Count) lines)  ->  $backupFile"
+} finally {
+    Remove-Item -LiteralPath $canonicalFile.FullName -Force -ErrorAction SilentlyContinue
 }
 
 if ($report.Count -eq 0) {
