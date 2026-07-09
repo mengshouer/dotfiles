@@ -18,7 +18,6 @@ fi
 
 # Files to guard. Add more here as the repo grows.
 guarded=(
-  "$HOME/.zshrc"
   "$HOME/.zshenv"
   "$HOME/.zimrc"
   "$HOME/.config/starship.toml"
@@ -27,6 +26,8 @@ guarded=(
 backup_dir="$HOME/.config/dotfiles/lost-and-found"
 mkdir -p "$backup_dir"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
+canonical_file="$(mktemp)"
+trap 'rm -f "$canonical_file"' EXIT
 
 any_extras=0
 report=""
@@ -37,10 +38,11 @@ extra_payloads=()
 for target in "${guarded[@]}"; do
   [[ -f "$target" ]] || continue
 
-  canonical="$(chezmoi cat "$target" 2>/dev/null || true)"
-  [[ -n "$canonical" ]] || continue
+  if ! chezmoi cat "$target" > "$canonical_file" 2>/dev/null; then
+    continue
+  fi
 
-  extras="$(diff <(printf '%s' "$canonical") "$target" 2>/dev/null \
+  extras="$(diff "$canonical_file" "$target" 2>/dev/null \
     | sed -n 's/^> //p' \
     | sed '/^[[:space:]]*$/d' \
     || true)"
@@ -74,8 +76,7 @@ $report
     s  skip backups and continue
     n  abort without applying
 
-  Common cause: installers (conda, rustup, vendor SDKs) appended
-  to ~/.zshrc. To keep that content across applies, move it to:
+  To keep local extras across applies, move them to:
     ~/.config/dotfiles/local.zsh   (auto-sourced every shell)
     ~/.config/dotfiles/local.env   (KEY=VALUE env vars)
     ~/.gitconfig                   (mutable Git config via git config --global)

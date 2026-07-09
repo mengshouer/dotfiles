@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="$HOME/.zshrc"
+managed_start='# >>> chezmoi dotfiles zsh start >>>'
+managed_end='# <<< chezmoi dotfiles zsh end <<<'
+managed_body='source "$HOME/.config/dotfiles/zsh/entry.zsh"'
+
+mkdir -p "$(dirname "$target")"
+touch "$target"
+
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+mapfile -t lines < "$target"
+start_indexes=()
+end_indexes=()
+
+for i in "${!lines[@]}"; do
+  if [[ "${lines[$i]}" == "$managed_start" ]]; then
+    start_indexes+=("$i")
+  fi
+  if [[ "${lines[$i]}" == "$managed_end" ]]; then
+    end_indexes+=("$i")
+  fi
+done
+
+if (( ${#start_indexes[@]} != ${#end_indexes[@]} )); then
+  printf '%s: managed zsh block markers are unbalanced\n' "$target" >&2
+  exit 1
+fi
+
+if (( ${#start_indexes[@]} > 1 )); then
+  printf '%s: multiple managed zsh blocks found\n' "$target" >&2
+  exit 1
+fi
+
+trim_trailing_blank_lines() {
+  local -n ref="$1"
+  while (( ${#ref[@]} > 0 )) && [[ -z "${ref[-1]}" ]]; do
+    unset 'ref[-1]'
+  done
+}
+
+trim_leading_blank_lines() {
+  local -n ref="$1"
+  while (( ${#ref[@]} > 0 )) && [[ -z "${ref[0]}" ]]; do
+    ref=("${ref[@]:1}")
+  done
+}
+
+rebuilt=()
+managed_block=("$managed_start" "$managed_body" "$managed_end")
+
+if (( ${#start_indexes[@]} == 1 )); then
+  start_index=${start_indexes[0]}
+  end_index=${end_indexes[0]}
+
+  if (( end_index <= start_index )); then
+    printf '%s: managed zsh block end marker appears before start marker\n' "$target" >&2
+    exit 1
+  fi
+
+  prefix=("${lines[@]:0:start_index}")
+  suffix=("${lines[@]:end_index + 1}")
+
+  trim_trailing_blank_lines prefix
+  trim_leading_blank_lines suffix
+
+  rebuilt=("${prefix[@]}")
+  if (( ${#rebuilt[@]} > 0 )); then
+    rebuilt+=("")
+  fi
+  rebuilt+=("${managed_block[@]}")
+  if (( ${#suffix[@]} > 0 )); then
+    rebuilt+=("")
+    rebuilt+=("${suffix[@]}")
+  fi
+else
+  rebuilt=("${lines[@]}")
+  trim_trailing_blank_lines rebuilt
+  if (( ${#rebuilt[@]} > 0 )); then
+    rebuilt+=("")
+  fi
+  rebuilt+=("${managed_block[@]}")
+fi
+
+if (( ${#rebuilt[@]} > 0 )); then
+  printf '%s\n' "${rebuilt[@]}" > "$tmp_file"
+else
+  : > "$tmp_file"
+fi
+
+cat "$tmp_file" > "$target"

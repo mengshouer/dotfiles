@@ -13,6 +13,7 @@ scripts/**
 .config/dotfiles/zsh/**
 .chezmoiscripts/apply_protect-overwrite.sh
 .chezmoiscripts/apply_ensure-gitconfig-include.sh
+.chezmoiscripts/run_after_apply_upsert-zshrc-block.sh
 {{ else }}
 Documents
 Documents/**
