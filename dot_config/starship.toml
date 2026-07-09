@@ -1,6 +1,6 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-format = "${custom.su_user}$directory$git_branch$git_state$git_status$nodejs$python$rust$bun$character"
+format = "$username$directory$git_branch$git_state$git_status$nodejs$python$rust$bun$character"
 
 add_newline = false
 
@@ -15,17 +15,14 @@ ok = "107"      # git normal states
 alert = "167"   # errors, in-progress git operations
 
 # =========================================================
-# IDENTITY (shown only when root, or after su/sudo -i)
+# IDENTITY
 # =========================================================
 
-[custom.su_user]
-description = "Show username only when root or switched away from the login user"
-command = "id -un"
-when = '[ "$(id -u)" -eq 0 ] || [ "$(id -un)" != "${LOGNAME:-$(id -un)}" ]'
-shell = ["sh"]
-style = "fg:alert"
-format = '[\[$output\]]($style)'
-os = "unix"
+[username]
+style_user = "fg:info"
+style_root = "fg:alert"
+format = '[\[$user\]]($style)'
+show_always = false
 
 # =========================================================
 # DIRECTORY
@@ -101,3 +98,4 @@ format = '[\[$symbol$version\]]($style)'
 success_symbol = '[>](fg:info)'
 error_symbol = '[>](fg:alert)'
 vimcmd_symbol = '[<](fg:ok)'
+
