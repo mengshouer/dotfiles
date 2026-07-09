@@ -1,5 +1,27 @@
 # Shared PowerShell aliases.
 
+function global:Set-DotfilesAlias {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [string]$Command
+    )
+
+    Set-Item -LiteralPath "Function:global:$Name" -Value "& $Command @args"
+}
+
+function global:_al {
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Definition
+    )
+
+    $name, $command = $Definition -split "=", 2
+    Set-DotfilesAlias -Name $name -Command $command
+}
+
 $aliases = [ordered]@{
     j     = "z"
     ji    = "zi"
@@ -40,7 +62,7 @@ $aliases = [ordered]@{
 }
 
 foreach ($alias in $aliases.GetEnumerator()) {
-    Set-Item -LiteralPath "Function:global:$($alias.Key)" -Value "& $($alias.Value) @args"
+    Set-DotfilesAlias -Name $alias.Key -Command $alias.Value
 }
 
 Remove-Variable aliases

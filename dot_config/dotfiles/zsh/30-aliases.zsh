@@ -1,5 +1,7 @@
 # Shared aliases.
 
+alias _al=alias
+
 alias j="z"
 alias ji="zi"
 
