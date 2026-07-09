@@ -12,83 +12,88 @@ touch "$target"
 tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
 
-mapfile -t lines < "$target"
-start_indexes=()
-end_indexes=()
-
-for i in "${!lines[@]}"; do
-  if [[ "${lines[$i]}" == "$managed_start" ]]; then
-    start_indexes+=("$i")
-  fi
-  if [[ "${lines[$i]}" == "$managed_end" ]]; then
-    end_indexes+=("$i")
-  fi
-done
-
-if (( ${#start_indexes[@]} != ${#end_indexes[@]} )); then
-  printf '%s: managed zsh block markers are unbalanced\n' "$target" >&2
-  exit 1
-fi
-
-if (( ${#start_indexes[@]} > 1 )); then
-  printf '%s: multiple managed zsh blocks found\n' "$target" >&2
-  exit 1
-fi
-
-trim_trailing_blank_lines() {
-  local -n ref="$1"
-  while (( ${#ref[@]} > 0 )) && [[ -z "${ref[-1]}" ]]; do
-    unset 'ref[-1]'
-  done
+awk \
+  -v target="$target" \
+  -v managed_start="$managed_start" \
+  -v managed_end="$managed_end" \
+  -v managed_body="$managed_body" '
+{
+  lines[++line_count] = $0
+  if ($0 == managed_start) {
+    start_count++
+    start_index = line_count
+  }
+  if ($0 == managed_end) {
+    end_count++
+    end_index = line_count
+  }
 }
-
-trim_leading_blank_lines() {
-  local -n ref="$1"
-  while (( ${#ref[@]} > 0 )) && [[ -z "${ref[0]}" ]]; do
-    ref=("${ref[@]:1}")
-  done
-}
-
-rebuilt=()
-managed_block=("$managed_start" "$managed_body" "$managed_end")
-
-if (( ${#start_indexes[@]} == 1 )); then
-  start_index=${start_indexes[0]}
-  end_index=${end_indexes[0]}
-
-  if (( end_index <= start_index )); then
-    printf '%s: managed zsh block end marker appears before start marker\n' "$target" >&2
+END {
+  if (start_count != end_count) {
+    printf "%s: managed zsh block markers are unbalanced\n", target > "/dev/stderr"
     exit 1
-  fi
+  }
 
-  prefix=("${lines[@]:0:start_index}")
-  suffix=("${lines[@]:end_index + 1}")
+  if (start_count > 1) {
+    printf "%s: multiple managed zsh blocks found\n", target > "/dev/stderr"
+    exit 1
+  }
 
-  trim_trailing_blank_lines prefix
-  trim_leading_blank_lines suffix
+  out_count = 0
 
-  rebuilt=("${prefix[@]}")
-  if (( ${#rebuilt[@]} > 0 )); then
-    rebuilt+=("")
-  fi
-  rebuilt+=("${managed_block[@]}")
-  if (( ${#suffix[@]} > 0 )); then
-    rebuilt+=("")
-    rebuilt+=("${suffix[@]}")
-  fi
-else
-  rebuilt=("${lines[@]}")
-  trim_trailing_blank_lines rebuilt
-  if (( ${#rebuilt[@]} > 0 )); then
-    rebuilt+=("")
-  fi
-  rebuilt+=("${managed_block[@]}")
-fi
+  if (start_count == 1) {
+    if (end_index <= start_index) {
+      printf "%s: managed zsh block end marker appears before start marker\n", target > "/dev/stderr"
+      exit 1
+    }
 
-if (( ${#rebuilt[@]} > 0 )); then
-  printf '%s\n' "${rebuilt[@]}" > "$tmp_file"
-else
-  : > "$tmp_file"
-fi
+    prefix_end = start_index - 1
+    while (prefix_end > 0 && lines[prefix_end] == "") {
+      prefix_end--
+    }
+
+    suffix_start = end_index + 1
+    while (suffix_start <= line_count && lines[suffix_start] == "") {
+      suffix_start++
+    }
+
+    for (i = 1; i <= prefix_end; i++) {
+      out[++out_count] = lines[i]
+    }
+    if (out_count > 0) {
+      out[++out_count] = ""
+    }
+    out[++out_count] = managed_start
+    out[++out_count] = managed_body
+    out[++out_count] = managed_end
+
+    if (suffix_start <= line_count) {
+      out[++out_count] = ""
+      for (i = suffix_start; i <= line_count; i++) {
+        out[++out_count] = lines[i]
+      }
+    }
+  } else {
+    last = line_count
+    while (last > 0 && lines[last] == "") {
+      last--
+    }
+
+    for (i = 1; i <= last; i++) {
+      out[++out_count] = lines[i]
+    }
+    if (out_count > 0) {
+      out[++out_count] = ""
+    }
+    out[++out_count] = managed_start
+    out[++out_count] = managed_body
+    out[++out_count] = managed_end
+  }
+
+  for (i = 1; i <= out_count; i++) {
+    print out[i]
+  }
+}
+' "$target" > "$tmp_file"
 
 cat "$tmp_file" > "$target"
