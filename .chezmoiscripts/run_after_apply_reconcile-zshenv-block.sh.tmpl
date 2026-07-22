@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="$HOME/.zshenv"
+system_zshrc="/etc/zsh/zshrc"
+managed_start='# >>> chezmoi dotfiles zshenv start >>>'
+managed_end='# <<< chezmoi dotfiles zshenv end <<<'
+managed_body='skip_global_compinit=1'
+
+needs_block=0
+if [[ -e "$system_zshrc" || -L "$system_zshrc" ]]; then
+  if [[ ! -f "$system_zshrc" ]]; then
+    printf '%s: system zshrc is not a regular file\n' "$system_zshrc" >&2
+    exit 1
+  fi
+  if [[ ! -r "$system_zshrc" ]]; then
+    printf '%s: system zshrc is not readable\n' "$system_zshrc" >&2
+    exit 1
+  fi
+
+  grep_status=0
+  command grep -Eq '^[[:space:]]*(skip_global_compinit|[^#[:space:]].*skip_global_compinit)' "$system_zshrc" || grep_status=$?
+  case "$grep_status" in
+    0) needs_block=1 ;;
+    1) ;;
+    *)
+      printf '%s: failed to inspect system zshrc\n' "$system_zshrc" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+target_exists=0
+target_is_symlink=0
+if [[ -L "$target" ]]; then
+  target_is_symlink=1
+  if [[ ! -e "$target" ]]; then
+    printf '%s: refusing to modify a broken symlink\n' "$target" >&2
+    exit 1
+  fi
+fi
+if [[ -e "$target" || -L "$target" ]]; then
+  if [[ ! -f "$target" ]]; then
+    printf '%s: zshenv target is not a regular file\n' "$target" >&2
+    exit 1
+  fi
+  target_exists=1
+fi
+
+if (( ! needs_block && ! target_exists )); then
+  exit 0
+fi
+
+if (( needs_block && ! target_exists )); then
+  touch "$target"
+  target_exists=1
+fi
+
+mode=remove
+if (( needs_block )); then
+  mode=upsert
+fi
+
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+awk_status=0
+awk \
+  -v target="$target" \
+  -v mode="$mode" \
+  -v managed_start="$managed_start" \
+  -v managed_end="$managed_end" \
+  -v managed_body="$managed_body" '
+{
+  lines[++line_count] = $0
+  if ($0 == managed_start) {
+    start_count++
+    start_index = line_count
+  }
+  if ($0 == managed_end) {
+    end_count++
+    end_index = line_count
+  }
+}
+END {
+  if (start_count != end_count) {
+    printf "%s: managed zshenv block markers are unbalanced\n", target > "/dev/stderr"
+    exit 1
+  }
+
+  if (start_count > 1) {
+    printf "%s: multiple managed zshenv blocks found\n", target > "/dev/stderr"
+    exit 1
+  }
+
+  if (start_count == 1 && end_index <= start_index) {
+    printf "%s: managed zshenv block end marker appears before start marker\n", target > "/dev/stderr"
+    exit 1
+  }
+
+  if (mode == "remove" && start_count == 0) {
+    exit 3
+  }
+
+  out_count = 0
+
+  if (mode == "upsert" && start_count == 0) {
+    last = line_count
+    while (last > 0 && lines[last] == "") {
+      last--
+    }
+
+    for (i = 1; i <= last; i++) {
+      out[++out_count] = lines[i]
+    }
+    if (out_count > 0) {
+      out[++out_count] = ""
+    }
+    out[++out_count] = managed_start
+    out[++out_count] = managed_body
+    out[++out_count] = managed_end
+  } else {
+    prefix_end = start_index - 1
+    while (prefix_end > 0 && lines[prefix_end] == "") {
+      prefix_end--
+    }
+
+    suffix_start = end_index + 1
+    while (suffix_start <= line_count && lines[suffix_start] == "") {
+      suffix_start++
+    }
+
+    for (i = 1; i <= prefix_end; i++) {
+      out[++out_count] = lines[i]
+    }
+
+    if (mode == "upsert") {
+      if (out_count > 0) {
+        out[++out_count] = ""
+      }
+      out[++out_count] = managed_start
+      out[++out_count] = managed_body
+      out[++out_count] = managed_end
+    }
+
+    if (suffix_start <= line_count) {
+      if (out_count > 0) {
+        out[++out_count] = ""
+      }
+      for (i = suffix_start; i <= line_count; i++) {
+        out[++out_count] = lines[i]
+      }
+    }
+  }
+
+  for (i = 1; i <= out_count; i++) {
+    print out[i]
+  }
+}
+' "$target" > "$tmp_file" || awk_status=$?
+
+if (( awk_status == 3 )); then
+  exit 0
+fi
+if (( awk_status != 0 )); then
+  exit "$awk_status"
+fi
+
+if [[ "$mode" == remove ]] && ! command grep -q '[^[:space:]]' "$tmp_file"; then
+  if (( target_is_symlink )); then
+    : > "$target"
+  else
+    rm -f "$target"
+  fi
+  exit 0
+fi
+
+if command cmp -s "$tmp_file" "$target"; then
+  exit 0
+fi
+
+cat "$tmp_file" > "$target"
