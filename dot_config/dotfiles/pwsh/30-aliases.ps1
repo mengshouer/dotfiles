@@ -9,7 +9,23 @@ function global:Set-DotfilesAlias {
         [string]$Command
     )
 
-    Set-Item -LiteralPath "Function:global:$Name" -Value "& $Command @args"
+    # Use Invoke-Expression to mimic bash-style alias (text substitution).
+    # This ensures .ps1 wrappers (e.g. fnm's npm.ps1) that parse
+    # $MyInvocation.Statement see the full command text with real arguments,
+    # instead of the unexpanded literal "@args".
+    $body = @'
+if ($args.Count) {
+    $q = @($args) | ForEach-Object {
+        if ($_.ToString().Contains(' ')) { '"{0}"' -f ($_ -replace '"', '\"') }
+        else { $_ }
+    }
+    Invoke-Expression ('__CMD__ ' + ($q -join ' '))
+} else {
+    Invoke-Expression '__CMD__'
+}
+'@.Replace('__CMD__', $Command.Replace("'", "''"))
+
+    Set-Item -LiteralPath "Function:global:$Name" -Value $body
 }
 
 function global:_al {
