@@ -7,6 +7,8 @@ bootstrap_parse_args() {
   update=0
 
   if (($#)); then
+    # `layer` is consumed by the sourcing platform bootstrap script.
+    # shellcheck disable=SC2034
     case "$1" in
       terminal|dev) layer="$1"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -96,6 +98,8 @@ path_remove_patterns() {
   IFS=:
   for entry in $PATH; do
     for pattern in "$@"; do
+      # Caller-provided patterns are intentionally expanded as globs.
+      # shellcheck disable=SC2254
       case "$entry" in
         $pattern) continue 2 ;;
       esac
@@ -169,12 +173,9 @@ bootstrap_prepare_path() {
   path_prepend "${XDG_BIN_HOME:-}"
   path_prepend "$(bootstrap_bin_dir)"
 
-  local fnm_dir
-  case "${OSTYPE:-}" in
-    darwin*) fnm_dir="${XDG_DATA_HOME:-$HOME/Library/Application Support}/fnm" ;;
-    *)      fnm_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fnm" ;;
-  esac
-  path_prepend "$fnm_dir"
+  if [[ "${OSTYPE:-}" != darwin* ]]; then
+    path_prepend "${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
+  fi
 }
 
 update_source_repo() {

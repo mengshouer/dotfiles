@@ -75,6 +75,7 @@ Unix `terminal` update 还会运行 `zimfw update`。
 
 - Unix `--set-shell` 显式允许 `chsh -s "$(command -v zsh)"`。
 - Unix `DOTFILES_BOOTSTRAP_BIN_DIR` 只覆盖当次 installer 的 bin 目录。
+- macOS 由 Homebrew 安装 `fnm`；其数据目录默认为 `${XDG_DATA_HOME:-$HOME/.local/share}/fnm`，且不能包含空白字符。如果只有旧的 `~/Library/Application Support/fnm` 目录存在，`bootstrap dev` 会停止并打印手动迁移命令。
 - Unix bootstrap 会在新安装的 `chezmoi` 不在当前 shell 的 `PATH` 时，输出准确的 `export PATH=...` 命令。
 - Local overrides 位于 `~/.config/dotfiles/`、`~/.gitconfig` 和 `~/.config/git/ignore.local`。
 - Git baseline 配置由 `~/.config/git/base.gitconfig` 管理；`chezmoi apply` 会在缺少 include 时追加入口，不会替换已有本地 Git 配置。

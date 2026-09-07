@@ -49,11 +49,28 @@ brew_install() {
   done
 }
 
+check_fnm_legacy_dir() {
+  local fnm_dir legacy_fnm_dir
+
+  fnm_dir="${FNM_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/fnm}"
+  legacy_fnm_dir="$HOME/Library/Application Support/fnm"
+  [[ "$fnm_dir" == "$legacy_fnm_dir" ]] && fnm_dir="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
+  [[ -d "$legacy_fnm_dir" && ! -e "$fnm_dir" ]] || return 0
+
+  printf 'Legacy fnm data directory found: %s\n' "$legacy_fnm_dir" >&2
+  printf 'Move it before rerunning bootstrap:\n' >&2
+  printf '  mkdir -p %q\n' "$(dirname "$fnm_dir")" >&2
+  printf '  mv %q %q\n' "$legacy_fnm_dir" "$fnm_dir" >&2
+  printf '  export FNM_DIR=%q\n' "$fnm_dir" >&2
+  return 1
+}
+
 case "$layer" in
   terminal)
     brew_install git curl chezmoi zsh starship zoxide fzf
     ;;
   dev)
+    check_fnm_legacy_dir
     brew_install fnm uv
     ;;
 esac
