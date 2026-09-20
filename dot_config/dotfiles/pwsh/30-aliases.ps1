@@ -340,6 +340,490 @@ function global:opendir {
         -TargetObject $directory
 }
 
+# toclip helpers: shared probe and I/O pieces for the toclip command below.
+
+function script:Test-DotfilesWindowsHost {
+    # Same probe opendir uses, so both commands in this file agree.
+    return ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT)
+}
+
+# The device that reaches the terminal in front of the user, regardless of
+# where stdout points.
+function script:Get-DotfilesTerminalDevicePath {
+    if (Test-DotfilesWindowsHost) {
+        return 'CONOUT$'
+    }
+
+    return '/dev/tty'
+}
+
+# Open the terminal device for writing, or $null when it is not reachable.
+function script:Open-DotfilesTerminalDevice {
+    try {
+        return [System.IO.File]::Open(
+            (Get-DotfilesTerminalDevicePath),
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite
+        )
+    } catch {
+        return $null
+    }
+}
+
+function script:Test-DotfilesTerminalDevice {
+    $stream = Open-DotfilesTerminalDevice
+    if ($null -eq $stream) {
+        return $false
+    }
+
+    $stream.Dispose()
+    return $true
+}
+
+# Check whether this session came in over sshd. Environment variables first,
+# then the process tree, because nested shells may have dropped SSH_*.
+function script:Test-DotfilesRemoteSession {
+    if ($env:SSH_CONNECTION -or $env:SSH_CLIENT -or $env:SSH_TTY) {
+        return $true
+    }
+
+    $cimAvailable = Get-Command -Name Get-CimInstance -ErrorAction SilentlyContinue
+    if (-not $cimAvailable) {
+        return $false
+    }
+
+    $currentId = $PID
+    for ($hop = 0; $hop -lt 10; $hop++) {
+        $process = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $currentId" -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            return $false
+        }
+
+        if ($process.Name -like 'sshd*') {
+            return $true
+        }
+
+        $currentId = $process.ParentProcessId
+        if (($null -eq $currentId) -or ($currentId -le 0)) {
+            return $false
+        }
+    }
+
+    return $false
+}
+
+function script:Get-DotfilesClipboardBackend {
+    if (Get-Command -Name Set-Clipboard -ErrorAction SilentlyContinue) {
+        return 'Set-Clipboard'
+    }
+
+    return $null
+}
+
+# Write raw bytes to the terminal, falling back to stdout only when stdout is a
+# terminal so that redirections stay untouched.
+function script:Write-DotfilesTerminalSequence {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Sequence
+    )
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Sequence)
+
+    $stream = Open-DotfilesTerminalDevice
+    if ($null -ne $stream) {
+        try {
+            try {
+                $stream.Write($bytes, 0, $bytes.Length)
+                $stream.Flush()
+                return $true
+            } finally {
+                $stream.Dispose()
+            }
+        } catch {
+        }
+    }
+
+    if (-not [Console]::IsOutputRedirected) {
+        try {
+            $stdout = [Console]::OpenStandardOutput()
+            $stdout.Write($bytes, 0, $bytes.Length)
+            $stdout.Flush()
+            return $true
+        } catch {
+        }
+    }
+
+    return $false
+}
+
+# $Payload is single line base64. Inside tmux the bare sequence is swallowed by
+# the default set-clipboard=external, so the DCS passthrough form (which needs
+# allow-passthrough on) is sent first, followed by the bare sequence that applies
+# when set-clipboard=on. Both carry the same payload, so whichever one the
+# terminal honours is correct.
+function script:Get-DotfilesOsc52Sequence {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Payload
+    )
+
+    $escape = [char]27
+    $bell = [char]7
+    $sequences = ''
+
+    if ($env:TMUX) {
+        $sequences += "$escape" + "Ptmux;$escape$escape]52;c;$Payload$bell$escape\"
+    }
+
+    return $sequences + "$escape]52;c;$Payload$bell"
+}
+
+function script:Format-DotfilesByteSize {
+    param(
+        [Parameter(Mandatory)]
+        [long]$Bytes
+    )
+
+    if ($Bytes -ge 1048576) {
+        return ('{0:0.0} MiB' -f ($Bytes / 1048576))
+    }
+
+    if ($Bytes -ge 1024) {
+        return ('{0:0.0} KiB' -f ($Bytes / 1024))
+    }
+
+    return "$Bytes B"
+}
+
+# Decode clipboard bytes as text. UTF-8 is assumed unless a BOM says otherwise.
+function script:ConvertFrom-DotfilesClipboardBytes {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [byte[]]$Bytes
+    )
+
+    if (($Bytes.Length -ge 3) -and ($Bytes[0] -eq 0xEF) -and ($Bytes[1] -eq 0xBB) -and ($Bytes[2] -eq 0xBF)) {
+        return [System.Text.Encoding]::UTF8.GetString($Bytes, 3, $Bytes.Length - 3)
+    }
+
+    if (($Bytes.Length -ge 2) -and ($Bytes[0] -eq 0xFF) -and ($Bytes[1] -eq 0xFE)) {
+        return [System.Text.Encoding]::Unicode.GetString($Bytes, 2, $Bytes.Length - 2)
+    }
+
+    return [System.Text.Encoding]::UTF8.GetString($Bytes)
+}
+
+# 0 = continue, 1 = cancelled, -1 = no terminal to ask on.
+function script:Read-DotfilesConfirmation {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Prompt
+    )
+
+    if ([Console]::IsInputRedirected) {
+        return -1
+    }
+
+    try {
+        $reply = Read-Host -Prompt $Prompt
+    } catch {
+        return -1
+    }
+
+    if ($reply -match '^(?i)\s*(y|yes)\s*$') {
+        return 0
+    }
+
+    return 1
+}
+
+# Copy text into the clipboard of the machine whose terminal you are looking at.
+# A local session uses the native clipboard; an SSH session emits OSC 52 so the
+# terminal emulator in front of you sets its own clipboard.
+function global:toclip {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromRemainingArguments)]
+        [string[]]$Path,
+
+        # Declared so that objects can be piped in; the body reads them from $input.
+        [Parameter(ValueFromPipeline)]
+        [object]$InputObject,
+
+        [switch]$Local,
+
+        [switch]$Osc52,
+
+        [switch]$PrintBase64,
+
+        [switch]$Which,
+
+        [switch]$Yes,
+
+        [int]$MaxKiB = -1
+    )
+
+    $reportError = {
+        param(
+            [string]$Message,
+            [string]$ErrorId,
+            [System.Management.Automation.ErrorCategory]$Category,
+            [object]$TargetObject
+        )
+
+        $record = [System.Management.Automation.ErrorRecord]::new(
+            [System.InvalidOperationException]::new($Message),
+            $ErrorId,
+            $Category,
+            $TargetObject
+        )
+        $PSCmdlet.WriteError($record)
+    }
+
+    $mode = 'auto'
+    if ($env:TOCLIP_MODE) {
+        $mode = $env:TOCLIP_MODE.Trim().ToLowerInvariant()
+    }
+    if ($Local) {
+        $mode = 'local'
+    }
+    if ($Osc52) {
+        $mode = 'osc52'
+    }
+
+    if ($mode -notin @('auto', 'local', 'osc52')) {
+        & $reportError `
+            -Message "toclip: TOCLIP_MODE must be auto|local|osc52: '$mode'" `
+            -ErrorId "ToClipboard.InvalidMode" `
+            -Category InvalidArgument `
+            -TargetObject $mode
+        return
+    }
+
+    # Note: PowerShell variable names are case-insensitive, so this must not be
+    # called $maxKiB - that would be the same variable as the -MaxKiB parameter.
+    $effectiveMaxKiB = 64
+    if ($MaxKiB -ge 0) {
+        $effectiveMaxKiB = $MaxKiB
+    } elseif ($env:TOCLIP_MAX_KIB) {
+        $parsedMaxKiB = 0
+        if ((-not [int]::TryParse($env:TOCLIP_MAX_KIB.Trim(), [ref]$parsedMaxKiB)) -or ($parsedMaxKiB -lt 0)) {
+            & $reportError `
+                -Message "toclip: TOCLIP_MAX_KIB must be an integer >= 0: '$($env:TOCLIP_MAX_KIB)'" `
+                -ErrorId "ToClipboard.InvalidMaxKiB" `
+                -Category InvalidArgument `
+                -TargetObject $env:TOCLIP_MAX_KIB
+            return
+        }
+
+        $effectiveMaxKiB = $parsedMaxKiB
+    }
+
+    $isRemote = Test-DotfilesRemoteSession
+    $backend = Get-DotfilesClipboardBackend
+
+    # A same-named external command (toclip.exe) is shadowed by this function.
+    $otherCommands = @(
+        Get-Command -Name 'toclip' -All -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandType -ne 'Function' }
+    )
+
+    $effective = $mode
+    if ($effective -eq 'auto') {
+        if ($backend -and ($isRemote -eq $false)) {
+            $effective = 'local'
+        } else {
+            $effective = 'osc52'
+        }
+    }
+
+    if ($Which) {
+        if ($isRemote) {
+            if ($env:SSH_CONNECTION -or $env:SSH_CLIENT -or $env:SSH_TTY) {
+                "session        : remote (SSH_* environment variables)"
+            } else {
+                "session        : remote (sshd found in the process tree)"
+            }
+        } else {
+            "session        : local"
+        }
+
+        "mode           : $mode -> $effective"
+        if ($backend) {
+            "native backend : $backend (native)"
+        } else {
+            "native backend : (none)"
+        }
+        "max-kib        : $effectiveMaxKiB"
+
+        $terminalDevice = Get-DotfilesTerminalDevicePath
+        if (Test-DotfilesTerminalDevice) {
+            "controlling tty: available ($terminalDevice)"
+        } elseif (-not [Console]::IsOutputRedirected) {
+            "controlling tty: unavailable, falling back to stdout"
+        } else {
+            "controlling tty: unavailable"
+        }
+
+        if ($env:TMUX) {
+            "tmux           : inside tmux, DCS passthrough is sent as well"
+        }
+        "self           : function toclip (PowerShell profile)"
+        foreach ($other in $otherCommands) {
+            "other toclip   : $($other.Source)"
+        }
+
+        return
+    }
+
+    foreach ($other in $otherCommands) {
+        Write-Warning "toclip: another toclip is also available: $($other.Source); this function wins inside PowerShell"
+    }
+
+    if ($effective -eq 'local' -and (-not $backend)) {
+        & $reportError `
+            -Message "toclip: no clipboard backend on this machine; use -Osc52" `
+            -ErrorId "ToClipboard.NoBackend" `
+            -Category ObjectNotFound `
+            -TargetObject $null
+        return
+    }
+
+    $buffer = New-Object System.IO.MemoryStream
+    try {
+        if (($null -ne $Path) -and ($Path.Count -gt 0)) {
+            foreach ($item in $Path) {
+                if ($item -eq '-') {
+                    $stdin = [Console]::OpenStandardInput()
+                    $stdin.CopyTo($buffer)
+                    continue
+                }
+
+                try {
+                    $fileItem = Get-Item -LiteralPath $item -Force -ErrorAction Stop
+                } catch {
+                    & $reportError `
+                        -Message "toclip: no such file: '$item'" `
+                        -ErrorId "ToClipboard.FileNotFound" `
+                        -Category ObjectNotFound `
+                        -TargetObject $item
+                    return
+                }
+
+                if (($fileItem.PSProvider.Name -ne "FileSystem") -or $fileItem.PSIsContainer) {
+                    & $reportError `
+                        -Message "toclip: not a file: '$item'" `
+                        -ErrorId "ToClipboard.NotFile" `
+                        -Category InvalidArgument `
+                        -TargetObject $item
+                    return
+                }
+
+                try {
+                    $fileBytes = [System.IO.File]::ReadAllBytes($fileItem.FullName)
+                } catch {
+                    & $reportError `
+                        -Message "toclip: cannot read '$item': $($_.Exception.Message)" `
+                        -ErrorId "ToClipboard.ReadFailed" `
+                        -Category ReadError `
+                        -TargetObject $item
+                    return
+                }
+
+                $buffer.Write($fileBytes, 0, $fileBytes.Length)
+            }
+        } elseif (@($input).Count -gt 0) {
+            $text = (@($input) | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+            $pipelineBytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+            $buffer.Write($pipelineBytes, 0, $pipelineBytes.Length)
+        } elseif ([Console]::IsInputRedirected) {
+            $stdin = [Console]::OpenStandardInput()
+            $stdin.CopyTo($buffer)
+        } else {
+            & $reportError `
+                -Message "toclip: no input; pass a file, pipe text in, or use -Path" `
+                -ErrorId "ToClipboard.NoInput" `
+                -Category InvalidArgument `
+                -TargetObject $null
+            return
+        }
+
+        $bytes = $buffer.ToArray()
+    } finally {
+        $buffer.Dispose()
+    }
+
+    $contentSize = $bytes.Length
+    $payload = [System.Convert]::ToBase64String($bytes)
+
+    if ($PrintBase64) {
+        $payload
+        return
+    }
+
+    if ($effective -eq 'local') {
+        $text = ConvertFrom-DotfilesClipboardBytes -Bytes $bytes
+
+        try {
+            Set-Clipboard -Value $text -ErrorAction Stop
+            return
+        } catch {
+            if ($mode -ne 'auto') {
+                & $reportError `
+                    -Message "toclip: copying to the clipboard failed: $($_.Exception.Message)" `
+                    -ErrorId "ToClipboard.CopyFailed" `
+                    -Category WriteError `
+                    -TargetObject $backend
+                return
+            }
+
+            Write-Warning "toclip: $backend failed ($($_.Exception.Message)); falling back to OSC 52"
+            $effective = 'osc52'
+        }
+    }
+
+    if (($effectiveMaxKiB -gt 0) -and ($contentSize -gt ($effectiveMaxKiB * 1024)) -and (-not $Yes)) {
+        $sizeText = Format-DotfilesByteSize -Bytes $contentSize
+        $reply = Read-DotfilesConfirmation -Prompt "toclip: content is $sizeText, above the $effectiveMaxKiB KiB threshold; some terminals truncate or drop long OSC 52 sequences. Continue? [y/N]"
+
+        if ($reply -lt 0) {
+            & $reportError `
+                -Message "toclip: content is $sizeText, above the $effectiveMaxKiB KiB threshold and there is no terminal to confirm on; use -Yes to continue or -MaxKiB 0 to lift the limit" `
+                -ErrorId "ToClipboard.SizeLimitWithoutConfirmation" `
+                -Category InvalidOperation `
+                -TargetObject $contentSize
+            return
+        }
+
+        if ($reply -ne 0) {
+            & $reportError `
+                -Message "toclip: cancelled" `
+                -ErrorId "ToClipboard.Cancelled" `
+                -Category OperationStopped `
+                -TargetObject $null
+            return
+        }
+    }
+
+    if ((Test-DotfilesWindowsHost) -and (-not $Host.UI.SupportsVirtualTerminal)) {
+        Write-Warning "toclip: this console does not support virtual terminal sequences; the clipboard was probably not set"
+    }
+
+    $sequence = Get-DotfilesOsc52Sequence -Payload $payload
+    if (-not (Write-DotfilesTerminalSequence -Sequence $sequence)) {
+        & $reportError `
+            -Message "toclip: cannot write the OSC 52 sequence to the terminal" `
+            -ErrorId "ToClipboard.WriteFailed" `
+            -Category WriteError `
+            -TargetObject $null
+        return
+    }
+}
+
 # Quick-edit local override files (machine-specific, not in repo).
 function script:Invoke-DotfilesEditor {
     param([string]$Path)

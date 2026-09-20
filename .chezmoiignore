@@ -11,6 +11,8 @@ scripts/**
 .zshenv
 .config/dotfiles/zsh
 .config/dotfiles/zsh/**
+.local
+.local/**
 .chezmoiscripts/apply_protect-overwrite.sh
 .chezmoiscripts/apply_ensure-gitconfig-include.sh
 .chezmoiscripts/apply_reconcile-zshenv-block.sh
