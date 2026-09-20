@@ -93,7 +93,7 @@ $($report -join [Environment]::NewLine)
     ~/.config/dotfiles/local.ps1   (auto-sourced by PowerShell profiles)
     ~/.config/dotfiles/local.env   (KEY=VALUE env vars)
     ~/.gitconfig                   (mutable Git config via git config --global)
-    ~/.config/git/ignore.local     (extra global Git ignore rules)
+    ~/.config/git/ignore           (global Git ignores; user-owned, live)
 
 ==============================================================
 "@)
@@ -109,7 +109,7 @@ switch ($answer) {
                 "# They will be lost when chezmoi apply overwrites $($item.Target).",
                 "#",
                 "# To keep them, move into ~/.config/dotfiles/local.ps1,",
-                "# ~/.config/dotfiles/local.env, or ~/.config/git/user.local.",
+                "# ~/.config/dotfiles/local.env, or ~/.config/git/ignore.",
                 "# ---"
             ) + $item.Extras
 

@@ -843,13 +843,7 @@ function global:elocal       { Invoke-DotfilesEditor (Join-Path $HOME ".config\d
 function global:elocalenv    { Invoke-DotfilesEditor (Join-Path $HOME ".config\dotfiles\local.env") }
 function global:egit         { Invoke-DotfilesEditor (Join-Path $HOME ".gitconfig") }
 function global:egitignore   {
-    $target = Join-Path $HOME ".config\git\ignore.local"
-    Invoke-DotfilesEditor $target
-    # ignore.local is included into ~/.config/git/ignore via chezmoi template.
-    # Re-apply so edits take effect immediately. GUI editors that detach
-    # (e.g. `code` without -w) may run apply before you save; re-run
-    # `chezmoi apply ~/.config/git/ignore` after saving in that case.
-    if (Get-Command chezmoi -ErrorAction SilentlyContinue) {
-        chezmoi apply (Join-Path $HOME ".config\git\ignore") 2>$null
-    }
+    # ~/.config/git/ignore is user-owned: chezmoi only seeds it once (create_),
+    # so Git reads edits immediately with no `chezmoi apply` in between.
+    Invoke-DotfilesEditor (Join-Path $HOME ".config\git\ignore")
 }

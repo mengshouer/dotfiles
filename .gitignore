@@ -23,7 +23,6 @@ Thumbs.db
 **/local.env
 **/local.zsh
 **/local.ps1
-**/user.local
 
 *.history
 *_history

@@ -77,5 +77,5 @@ Unix `terminal` update also runs `zimfw update`.
 - Unix `DOTFILES_BOOTSTRAP_BIN_DIR` overrides the installer bin directory for that run.
 - On macOS, Homebrew installs `fnm`, while its data directory defaults to `${XDG_DATA_HOME:-$HOME/.local/share}/fnm` and must not contain whitespace. If only the legacy `~/Library/Application Support/fnm` directory exists, `bootstrap dev` stops and prints the manual migration commands.
 - Unix bootstrap prints the exact `export PATH=...` command when a newly installed `chezmoi` is outside the current shell's `PATH`.
-- Local overrides live under `~/.config/dotfiles/`, `~/.gitconfig`, and `~/.config/git/ignore.local`.
+- Local overrides live under `~/.config/dotfiles/`, `~/.gitconfig`, and `~/.config/git/ignore`; the last is seeded once by chezmoi and then user-owned, so Git picks up edits immediately.
 - Git baseline settings are managed in `~/.config/git/base.gitconfig`; `chezmoi apply` adds a missing include without replacing existing local Git settings.

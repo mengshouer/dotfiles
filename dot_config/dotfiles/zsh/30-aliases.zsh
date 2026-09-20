@@ -123,16 +123,11 @@ elocal()      { ${EDITOR:-${VISUAL:-vi}} "${XDG_CONFIG_HOME:-$HOME/.config}/dotf
 elocalenv()   { ${EDITOR:-${VISUAL:-vi}} "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.env"; }
 egit()        { ${EDITOR:-${VISUAL:-vi}} "$HOME/.gitconfig"; }
 egitignore() {
-  local target="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore.local"
+  # ~/.config/git/ignore is user-owned: chezmoi only seeds it once (create_),
+  # so Git reads edits immediately with no `chezmoi apply` in between.
+  local target="$HOME/.config/git/ignore"
   local editor="${EDITOR:-${VISUAL:-vi}}"
   ${=editor} "$target"
-  # ignore.local is included into ~/.config/git/ignore via chezmoi template.
-  # Re-apply so edits take effect immediately. If the editor is a GUI that
-  # detaches (e.g. `code` without -w), this will run before your save;
-  # re-run `chezmoi apply ~/.config/git/ignore` after saving.
-  if command -v chezmoi >/dev/null 2>&1; then
-    chezmoi apply "${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore" 2>/dev/null
-  fi
 }
 
 if [[ "$OSTYPE" == linux* ]]; then
