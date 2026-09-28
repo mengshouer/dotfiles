@@ -24,6 +24,8 @@ Thumbs.db
 **/local.zsh
 **/local.ps1
 
+.local/
+
 *.history
 *_history
 .zsh_history

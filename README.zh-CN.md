@@ -73,7 +73,8 @@ Unix `terminal` update 还会运行 `zimfw update`。
 
 ## 备注
 
-- Unix `--set-shell` 显式允许 `chsh -s "$(command -v zsh)"`。
+- Unix `--set-shell` 显式允许把 zsh 设为默认 shell（`chsh`，缺少 `chsh` 时改用 `usermod -s`）；已经是登录 shell 时会跳过。
+- 无 Homebrew 时，系统包走 apt 或 dnf/yum；发行版仓库里没有 `fzf` 时，改用官方 release 二进制（Linux `amd64`/`arm64`）。
 - Unix `DOTFILES_BOOTSTRAP_BIN_DIR` 只覆盖当次 installer 的 bin 目录。
 - macOS 由 Homebrew 安装 `fnm`；其数据目录默认为 `${XDG_DATA_HOME:-$HOME/.local/share}/fnm`，且不能包含空白字符。如果只有旧的 `~/Library/Application Support/fnm` 目录存在，`bootstrap dev` 会停止并打印手动迁移命令。
 - Unix bootstrap 会在新安装的 `chezmoi` 不在当前 shell 的 `PATH` 时，输出准确的 `export PATH=...` 命令。

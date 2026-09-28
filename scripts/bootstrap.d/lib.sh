@@ -254,25 +254,81 @@ print_manual_chezmoi_steps() {
   say "  bash scripts/bootstrap terminal --set-shell  # optional: set zsh as default shell"
 }
 
+current_login_shell() {
+  local user entry
+  user="$(id -un)" || return 1
+
+  # macOS stores ordinary user accounts in Directory Services, not /etc/passwd.
+  if [[ "${OSTYPE:-}" == darwin* ]]; then
+    have dscl || return 1
+    entry="$(dscl . -read "/Users/$user" UserShell 2>/dev/null)" || return 1
+    [[ "$entry" == "UserShell: /"* ]] || return 1
+    printf '%s\n' "${entry#UserShell: }"
+    return 0
+  fi
+
+  if have getent; then
+    entry="$(getent passwd "$user")" || return 1
+  else
+    entry="$(awk -F: -v user="$user" '$1 == user' /etc/passwd)" || return 1
+  fi
+
+  [[ -n "$entry" ]] || return 1
+  printf '%s\n' "${entry##*:}"
+}
+
 set_shell_if_requested() {
   (( set_shell )) || return 0
+
   have zsh || {
-    say "zsh is required for --set-shell."
-    return 1
+    say "Skipping --set-shell: zsh is not installed."
+    return 0
   }
 
   local target_shell
   target_shell="$(command -v zsh)"
 
+  local current_shell
+  if current_shell="$(current_login_shell)" && [[ "$current_shell" == "$target_shell" ]]; then
+    say "Login shell is already $target_shell."
+    return 0
+  fi
+
   if [[ -r /etc/shells ]] && ! grep -qxF "$target_shell" /etc/shells; then
-    say "Skipping chsh: $target_shell is not in /etc/shells."
+    say "Skipping --set-shell: $target_shell is not in /etc/shells."
     if (( EUID == 0 )); then
       say "Add it first with: echo $target_shell >> /etc/shells"
     else
       say "Add it first with: echo $target_shell | sudo tee -a /etc/shells"
     fi
+    return 0
+  fi
+
+  if have chsh; then
+    if run chsh -s "$target_shell"; then
+      say "Default shell set to $target_shell (effective on next login)."
+      return 0
+    fi
+
+    say "chsh failed to set $target_shell as the default shell."
     return 1
   fi
 
-  run chsh -s "$target_shell"
+  if have usermod; then
+    if run_as_root usermod -s "$target_shell" "$(id -un)"; then
+      say "Default shell set to $target_shell via usermod (effective on next login)."
+      return 0
+    fi
+
+    say "Failed to set $target_shell as the default shell."
+    say "Run it manually as root: usermod -s $target_shell $(id -un)"
+    return 1
+  fi
+
+  say "Skipping --set-shell: neither chsh nor usermod is available."
+  say "Install the shell utilities, then re-run with --set-shell:"
+  say "  Debian/Ubuntu: sudo apt-get install -y passwd"
+  say "  Fedora/RHEL:   sudo dnf install -y util-linux-user"
+  say "  Alpine:        sudo apk add shadow"
+  return 0
 }

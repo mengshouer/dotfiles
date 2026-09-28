@@ -11,7 +11,7 @@ Layers:
   dev        fnm uv
 
 Flags:
-  --set-shell   opt in to chsh -s "$(command -v zsh)"
+  --set-shell   opt in to setting zsh as the default shell (chsh)
   --update      git pull --ff-only, apply dotfiles, update zimfw
 EOF
 }

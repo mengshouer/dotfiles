@@ -5,6 +5,10 @@ LICENSE
 scripts
 scripts/**
 
+# Do not add ".local" here: patterns match target paths, so it would hide
+# everything deployed from dot_local/ (e.g. ~/.local/bin/toclip). chezmoi
+# already skips source entries that start with a literal dot.
+
 {{ if eq .chezmoi.os "windows" }}
 .zshrc
 .zimrc
