@@ -24,8 +24,10 @@ zsh_micromamba_alias_if_free() {
 }
 
 zsh_micromamba_aliases() {
-  zsh_micromamba_alias_if_free mm '"$MAMBA_EXE"'
-  zsh_micromamba_alias_if_free mmi '"$MAMBA_EXE" install -p "$MAMBA_ROOT_PREFIX"'
+  # Use the command name rather than "$MAMBA_EXE" so zsh-syntax-highlighting
+  # can resolve the alias as an executable command.
+  zsh_micromamba_alias_if_free mm 'micromamba'
+  zsh_micromamba_alias_if_free mmi 'micromamba install -p "$MAMBA_ROOT_PREFIX"'
 }
 
 zsh_micromamba_path() {
