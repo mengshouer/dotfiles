@@ -21,6 +21,11 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 source "$script_dir/lib.sh"
 bootstrap_parse_args "$@"
 
+if [[ "$layer" == "micromamba" ]]; then
+  printf 'The micromamba layer is supported on Linux only.\n' >&2
+  exit 2
+fi
+
 if (( EUID == 0 )); then
   printf 'Homebrew cannot be used as root. Run macOS bootstrap as a normal user.\n' >&2
   exit 1

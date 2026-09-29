@@ -10,7 +10,7 @@ bootstrap_parse_args() {
     # `layer` is consumed by the sourcing platform bootstrap script.
     # shellcheck disable=SC2034
     case "$1" in
-      terminal|dev) layer="$1"; shift ;;
+      terminal|dev|micromamba) layer="$1"; shift ;;
       -h|--help) usage; exit 0 ;;
     esac
   fi
