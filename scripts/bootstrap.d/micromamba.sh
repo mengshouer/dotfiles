@@ -8,7 +8,7 @@ install_micromamba() (
   local bin_dir="$HOME/.local/bin"
   local root_prefix="$HOME/.local/share/mamba"
   local executable="$bin_dir/micromamba"
-  local platform tmp_dir="" dependency
+  local platform tmp_dir=""
 
   case "$(uname -m)" in
     x86_64|amd64) platform=linux-64 ;;
@@ -30,23 +30,15 @@ install_micromamba() (
       say "Refusing to overwrite the existing non-executable path: $executable"
       return 1
     fi
-    for dependency in curl tar bzip2; do
-      if ! have "$dependency"; then
-        say "Micromamba bootstrap requires $dependency in the base image; no system packages will be installed."
-        return 1
-      fi
-    done
-
     mkdir -p "$bin_dir"
     tmp_dir="$(mktemp -d "$bin_dir/.micromamba-install.XXXXXX")"
     trap 'rm -rf -- "$tmp_dir"' EXIT
     say "Installing Micromamba from the official $platform release into $bin_dir."
-    curl -fsSL --retry 3 -o "$tmp_dir/micromamba.tar.bz2" \
-      "https://micro.mamba.pm/api/micromamba/$platform/latest"
-    tar -xjf "$tmp_dir/micromamba.tar.bz2" -C "$tmp_dir" bin/micromamba
-    chmod 0755 "$tmp_dir/bin/micromamba"
-    "$tmp_dir/bin/micromamba" --version
-    mv "$tmp_dir/bin/micromamba" "$executable"
+    curl -fsSL --retry 3 -o "$tmp_dir/micromamba" \
+      "https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-$platform"
+    chmod 0755 "$tmp_dir/micromamba"
+    "$tmp_dir/micromamba" --version
+    mv "$tmp_dir/micromamba" "$executable"
   fi
   "$executable" --version
 

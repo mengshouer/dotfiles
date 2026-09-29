@@ -17,7 +17,7 @@ Flags:
 
 Run as root to install shared terminal/dev tools into /usr/local/bin for all users.
 The micromamba layer always installs under HOME, including for root.
-It requires glibc Linux (x86_64/aarch64), curl, tar and bzip2; it installs no system packages.
+It requires glibc Linux (x86_64/aarch64), curl and working HTTPS certificates; it installs no system packages.
 EOF
 }
 
