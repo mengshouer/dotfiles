@@ -10,7 +10,7 @@ bootstrap_parse_args() {
     # `layer` is consumed by the sourcing platform bootstrap script.
     # shellcheck disable=SC2034
     case "$1" in
-      terminal|dev|micromamba) layer="$1"; shift ;;
+      terminal|dev|pixi) layer="$1"; shift ;;
       -h|--help) usage; exit 0 ;;
     esac
   fi
@@ -53,7 +53,7 @@ bootstrap_prepare_root_environment() {
 
   # Drop env vars leaked from a normal user's session; keep root's own values.
   local var
-  for var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE; do
+  for var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME ZDOTDIR ZIM_CONFIG_FILE PIXI_HOME; do
     case "${!var:-}" in
       /home/*|/Users/*) unset "$var" ;;
     esac

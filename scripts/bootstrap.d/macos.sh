@@ -21,8 +21,8 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 source "$script_dir/lib.sh"
 bootstrap_parse_args "$@"
 
-if [[ "$layer" == "micromamba" ]]; then
-  printf 'The micromamba layer is supported on Linux only.\n' >&2
+if [[ "$layer" == "pixi" ]]; then
+  printf 'The pixi layer is supported on Linux only.\n' >&2
   exit 2
 fi
 

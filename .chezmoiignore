@@ -9,6 +9,14 @@ scripts/**
 # everything deployed from dot_local/ (e.g. ~/.local/bin/toclip). chezmoi
 # already skips source entries that start with a literal dot.
 
+# pixi state is machine-local: bootstrap installs the binary and the wrapper
+# in .config/dotfiles/zsh/60-pixi.zsh manages tools, but the global manifest
+# and every environment stay on the machine that created them.
+.config/pixi
+.config/pixi/**
+.pixi
+.pixi/**
+
 {{ if eq .chezmoi.os "windows" }}
 .zshrc
 .zimrc
