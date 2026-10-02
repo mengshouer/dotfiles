@@ -38,6 +38,7 @@ dotfiles_load_env_file "$dotfiles_config_home/dotfiles/local.env"
 
 dotfiles_zsh_dir="$dotfiles_config_home/dotfiles/zsh"
 dotfiles_zsh_early_path_file="$dotfiles_zsh_dir/05-path.zsh"
+dotfiles_zsh_micromamba_path_file="$dotfiles_zsh_dir/06-micromamba-path.zsh"
 
 zsh_path_prepend() {
   [[ -d "$1" ]] || return 0
@@ -47,6 +48,7 @@ zsh_path_prepend() {
 
 # Prompt modules need tool paths before zimfw sources modules.
 [[ -f "$dotfiles_zsh_early_path_file" ]] && source "$dotfiles_zsh_early_path_file"
+[[ -f "$dotfiles_zsh_micromamba_path_file" ]] && source "$dotfiles_zsh_micromamba_path_file"
 
 # Module configuration that must exist before zimfw sources modules.
 ZSH_AUTOSUGGEST_MANUAL_REBIND=1
@@ -72,10 +74,11 @@ fi
 
 if [[ -d "$dotfiles_zsh_dir" ]]; then
   for dotfiles_zsh_file in "$dotfiles_zsh_dir"/[0-9][0-9]-*.zsh; do
-    [[ "$dotfiles_zsh_file" == "$dotfiles_zsh_early_path_file" ]] && continue
+    [[ "$dotfiles_zsh_file" == "$dotfiles_zsh_early_path_file" ||
+       "$dotfiles_zsh_file" == "$dotfiles_zsh_micromamba_path_file" ]] && continue
     [[ -f "$dotfiles_zsh_file" ]] && source "$dotfiles_zsh_file"
   done
 fi
 
-unset dotfiles_cache_home dotfiles_config_home dotfiles_home dotfiles_zsh_early_path_file dotfiles_zsh_file dotfiles_zsh_dir zim_init_file zimfw_file zimrc_file
+unset dotfiles_cache_home dotfiles_config_home dotfiles_home dotfiles_zsh_early_path_file dotfiles_zsh_micromamba_path_file dotfiles_zsh_file dotfiles_zsh_dir zim_init_file zimfw_file zimrc_file
 unfunction dotfiles_load_env_file

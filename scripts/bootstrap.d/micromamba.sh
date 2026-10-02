@@ -4,7 +4,7 @@
 install_micromamba() (
   set -euo pipefail
 
-  # Keep this layout in sync with dot_config/dotfiles/zsh/60-micromamba.zsh.
+  # Keep this layout in sync with dot_config/dotfiles/zsh/06-micromamba-path.zsh.
   local bin_dir="$HOME/.local/bin"
   local root_prefix="$HOME/.local/share/mamba"
   local executable="$bin_dir/micromamba"
@@ -69,9 +69,7 @@ install_micromamba() (
     return 1
   fi
 
-  # Commit opt-in only after successful setup. Normal shell startup never installs.
-  touch "$root_prefix/.dotfiles-enabled"
   say "Micromamba base environment is ready at $root_prefix."
-  say "After chezmoi apply, open a new zsh terminal: its base/bin is added to PATH and full activation is deferred."
+  say "After chezmoi apply, open a new zsh terminal: its fixed micromamba installation path will be detected and base/named environment bin directories added to PATH without activation."
   say "Install packages there with: micromamba install -c conda-forge git ripgrep jq"
 )
