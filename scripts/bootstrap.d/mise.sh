@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Optional Linux-only mise setup; uses mise's official per-user layout
-# (~/.local/bin/mise) inside the current user's HOME.
+# Optional Unix mise setup (Linux and macOS); uses mise's official per-user
+# layout (~/.local/bin/mise) inside the current user's HOME.
 
 install_mise() (
   set -euo pipefail
@@ -11,7 +11,7 @@ install_mise() (
 
   case "$(uname -m)" in
     x86_64|amd64|aarch64|arm64) ;;
-    *) say "mise bootstrap supports Linux x86_64 and aarch64 only."; return 1 ;;
+    *) say "mise bootstrap supports x86_64/amd64 and aarch64/arm64 only."; return 1 ;;
   esac
 
   # Never replace a symlink or an unrelated existing path.

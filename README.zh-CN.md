@@ -50,11 +50,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 
 
 默认 layer 是 `terminal`；`dev` 只安装 `fnm` 和 `uv`。
 
-可选的 `mise` layer 仅支持 Linux（`bash scripts/bootstrap mise`），只安装 mise 官方默认的按用户布局：二进制在 `~/.local/bin/mise`，工具和 shims 在 `~/.local/share/mise`。
+可选的 `mise` layer（`bash scripts/bootstrap mise`，支持 Linux 和 macOS）用 mise 官方安装脚本（不是 Homebrew）安装官方默认的按用户布局：二进制在 `~/.local/bin/mise`，工具和 shims 在 `~/.local/share/mise`。
 工具、安装目录和 lockfile 属于各机器的本地状态，不由 chezmoi 管理。
-zsh 集成会把 shims 加入 `PATH`（`~/.local/bin` 本身已在 PATH 中），并提供 `mise_activate`/`mise_deactivate` 以及 `mise_*` 相关快捷函数。
+zsh 集成会把 shims 加入 `PATH`（`~/.local/bin` 本身已在 PATH 中），并提供 `mise_activate`/`mise_deactivate` 以及 `mise_*` 相关快捷函数；布局是固定的，因此安装在其它位置（例如 Homebrew 版）的 mise 不会被识别。
 交互 shell 会在首个提示符之后通过 `zsh-defer` 自动激活，启动速度不受影响（没有 `zsh-defer` 时退回立即激活）；`mise_deactivate` 可让当前 shell 退出激活。
-mise 当前只作为 Linux layer，其他平台有更好的选择。
+macOS 上 mise shims 和 `~/.local/bin` 位于 Homebrew 之前，因此 mise 安装的同名工具会覆盖 Homebrew 的同名命令。
 
 ## Update
 

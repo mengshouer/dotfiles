@@ -4,11 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [terminal|dev] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev|mise] [--set-shell] [--update]
 
 Layers:
   terminal   git curl chezmoi zsh starship zoxide fzf zimfw
   dev        fnm uv
+  mise       mise under HOME (independent, opt-in)
 
 Flags:
   --set-shell   opt in to setting zsh as the default shell (chsh)
@@ -20,11 +21,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 source "$script_dir/lib.sh"
 bootstrap_parse_args "$@"
-
-if [[ "$layer" == "mise" ]]; then
-  printf 'The mise layer is supported on Linux only.\n' >&2
-  exit 2
-fi
 
 if (( EUID == 0 )); then
   printf 'Homebrew cannot be used as root. Run macOS bootstrap as a normal user.\n' >&2
@@ -77,6 +73,10 @@ case "$layer" in
   dev)
     check_fnm_legacy_dir
     brew_install fnm uv
+    ;;
+  mise)
+    source "$script_dir/mise.sh"
+    install_mise
     ;;
 esac
 
