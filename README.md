@@ -50,6 +50,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 
 
 Default layer is `terminal`; `dev` installs `fnm` and `uv`.
 
+The optional Linux-only `mise` layer (`bash scripts/bootstrap mise`) installs mise's official per-user layout: the binary at `~/.local/bin/mise`, with installs and shims under `~/.local/share/mise`.
+Tool lists, installs and lockfiles remain machine-local and are not managed by chezmoi.
+Its zsh integration keeps the shims on `PATH` (the binary directory is already on `PATH`) and provides `mise_activate`/`mise_deactivate` plus the related `mise_*` helper functions.
+Interactive shells activate mise after the first prompt with `zsh-defer`, so startup stays fast (without `zsh-defer` the activation runs immediately); `mise_deactivate` opts the current shell out.
+mise is currently a Linux layer; other platforms have better options.
+
 ## Update
 
 Unix:

@@ -9,13 +9,17 @@ scripts/**
 # everything deployed from dot_local/ (e.g. ~/.local/bin/toclip). chezmoi
 # already skips source entries that start with a literal dot.
 
-# pixi state is machine-local: bootstrap installs the binary and the wrapper
-# in .config/dotfiles/zsh/60-pixi.zsh manages tools, but the global manifest
-# and every environment stay on the machine that created them.
-.config/pixi
-.config/pixi/**
-.pixi
-.pixi/**
+# mise state is machine-local: the bootstrap installs the binary into
+# ~/.local/bin and mise keeps installs, shims, caches and lockfiles under the
+# current user's XDG directories.
+.config/mise
+.config/mise/**
+.local/share/mise
+.local/share/mise/**
+.local/state/mise
+.local/state/mise/**
+.cache/mise
+.cache/mise/**
 
 {{ if eq .chezmoi.os "windows" }}
 .zshrc

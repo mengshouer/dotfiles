@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [dev] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev] [--set-shell] [--update]
 
 Layers:
   terminal   git curl chezmoi zsh starship zoxide fzf zimfw
@@ -21,8 +21,8 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 source "$script_dir/lib.sh"
 bootstrap_parse_args "$@"
 
-if [[ "$layer" == "pixi" ]]; then
-  printf 'The pixi layer is supported on Linux only.\n' >&2
+if [[ "$layer" == "mise" ]]; then
+  printf 'The mise layer is supported on Linux only.\n' >&2
   exit 2
 fi
 

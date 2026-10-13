@@ -4,19 +4,19 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [terminal|dev|pixi] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev|mise] [--set-shell] [--update]
 
 Layers:
   terminal   git curl ca-certificates chezmoi zsh starship zoxide fzf zimfw
   dev        fnm uv
-  pixi       pixi global tool manager under HOME (independent, opt-in)
+  mise       mise under HOME (independent, opt-in)
 
 Flags:
   --set-shell   opt in to setting zsh as the default shell (chsh, or usermod when chsh is unavailable)
   --update      git pull --ff-only, apply dotfiles, update zimfw
 
 Run as root to install shared terminal/dev tools into /usr/local/bin for all users.
-The pixi layer always installs under HOME, including for root.
+The mise layer always installs under HOME, including for root.
 It requires Linux (x86_64/aarch64), curl and working HTTPS certificates; it installs no system packages.
 EOF
 }
@@ -339,9 +339,9 @@ case "$layer" in
     install_fnm
     install_uv
     ;;
-  pixi)
-    source "$script_dir/pixi.sh"
-    install_pixi
+  mise)
+    source "$script_dir/mise.sh"
+    install_mise
     ;;
 esac
 
