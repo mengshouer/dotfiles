@@ -7,11 +7,14 @@ $dotfilesProfileLoader = if ($PSCommandPath) {
     Join-Path $dotfilesPwshDir "00-profile-loader.ps1"
 }
 
-if (Test-Path -LiteralPath $dotfilesPwshDir -PathType Container) {
-    Get-ChildItem -LiteralPath $dotfilesPwshDir -Filter "*.ps1" |
-        Where-Object { (-not $dotfilesProfileLoader) -or ($_.FullName -ne $dotfilesProfileLoader) } |
-        Sort-Object Name |
-        ForEach-Object { . $_.FullName }
+if ([System.IO.Directory]::Exists($dotfilesPwshDir)) {
+    $dotfilesScripts = [System.IO.Directory]::GetFiles($dotfilesPwshDir, "*.ps1")
+    [System.Array]::Sort($dotfilesScripts, [System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($dotfilesScript in $dotfilesScripts) {
+        if ((-not $dotfilesProfileLoader) -or (-not [string]::Equals($dotfilesScript, $dotfilesProfileLoader, [System.StringComparison]::OrdinalIgnoreCase))) {
+            . $dotfilesScript
+        }
+    }
 }
 
-Remove-Variable dotfilesPwshDir, dotfilesProfileLoader -ErrorAction SilentlyContinue
+Remove-Variable dotfilesPwshDir, dotfilesProfileLoader, dotfilesScripts, dotfilesScript -ErrorAction SilentlyContinue
