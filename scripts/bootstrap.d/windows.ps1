@@ -1,18 +1,10 @@
-param(
-    [Parameter(Position = 0)]
-    [ValidateSet("terminal", "dev")]
-    [string]$Layer = "terminal",
-
-    [switch]$Update
-)
-
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
 function Write-Usage {
     @"
 Usage:
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 [dev] [-Update]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 [terminal|dev] [-Update]
 
 Layers:
   terminal   git chezmoi starship zoxide fzf
@@ -24,6 +16,55 @@ PowerShell 5.1.
 Flags:
   -Update   git pull --ff-only and apply dotfiles
 "@ | Write-Host
+}
+
+$Layer = "terminal"
+$Update = $false
+
+$argIndex = 0
+if ($args.Count -gt 0) {
+    $firstArg = [string]$args[0]
+    switch -Exact ($firstArg) {
+        "terminal" { $Layer = "terminal"; $argIndex = 1 }
+        "dev"      { $Layer = "dev"; $argIndex = 1 }
+        "-h"       { Write-Usage; exit 0 }
+        "--help"   { Write-Usage; exit 0 }
+        "-Help"    { Write-Usage; exit 0 }
+        "-?"       { Write-Usage; exit 0 }
+    }
+}
+
+for ($i = $argIndex; $i -lt $args.Count; $i++) {
+    $arg = [string]$args[$i]
+    switch -Exact ($arg) {
+        "-Layer" {
+            if (($i + 1) -ge $args.Count) {
+                [Console]::Error.WriteLine("Missing value for -Layer.")
+                Write-Usage
+                exit 2
+            }
+            $i++
+            $layerValue = [string]$args[$i]
+            if ($layerValue -notin @("terminal", "dev")) {
+                [Console]::Error.WriteLine("Unknown layer: $layerValue")
+                Write-Usage
+                exit 2
+            }
+            $Layer = $layerValue.ToLowerInvariant()
+        }
+        "-Update"  { $Update = $true }
+        "-update"  { $Update = $true }
+        "--update" { $Update = $true }
+        "-h"       { Write-Usage; exit 0 }
+        "--help"   { Write-Usage; exit 0 }
+        "-Help"    { Write-Usage; exit 0 }
+        "-?"       { Write-Usage; exit 0 }
+        default {
+            [Console]::Error.WriteLine("Unknown argument: $arg")
+            Write-Usage
+            exit 2
+        }
+    }
 }
 
 function Invoke-Step {
@@ -73,13 +114,14 @@ function Invoke-SourceUpdate {
     }
 }
 
-function Install-ScoopIfMissing {
+function Ensure-Scoop {
     if (Test-Command scoop) {
         return
     }
 
-    Write-Host "Scoop is required for Windows bootstrap: https://scoop.sh/"
-    Write-Host "Install Scoop manually, then rerun this script."
+    [Console]::Error.WriteLine("Scoop is required for Windows bootstrap: https://scoop.sh/")
+    [Console]::Error.WriteLine("Install Scoop manually, then rerun this script.")
+    exit 1
 }
 
 function Test-ScoopPackageInstalled {
@@ -120,10 +162,7 @@ function Test-ScoopPackageInstalled {
 function Install-ScoopPackage {
     param([string[]]$Packages)
 
-    Install-ScoopIfMissing
-    if (-not (Test-Command scoop)) {
-        return
-    }
+    Ensure-Scoop
 
     foreach ($package in $Packages) {
         if (-not (Test-ScoopPackageInstalled -Package $package)) {

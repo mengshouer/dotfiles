@@ -88,7 +88,12 @@ if ($dotfilesFnmPath) {
                 continue
             }
             $aliasDir = Join-Path $candidate "aliases\default"
-            if ([System.IO.Directory]::Exists($aliasDir)) {
+            $aliasBinDir = Join-Path $aliasDir "bin"
+            if ([System.IO.Directory]::Exists($aliasBinDir)) {
+                $dotfilesFnmDefaultAlias = $aliasBinDir
+                $dotfilesFnmDirResolved = $candidate
+                break
+            } elseif ([System.IO.Directory]::Exists($aliasDir)) {
                 $dotfilesFnmDefaultAlias = $aliasDir
                 $dotfilesFnmDirResolved = $candidate
                 break
@@ -179,23 +184,28 @@ if ($dotfilesFnmPath) {
             [string]$DirectoryPath = (Get-Location).ProviderPath
         )
 
-        if (-not $DirectoryPath) {
-            return $false
-        }
+        $dir = $DirectoryPath
+        while ($dir) {
+            if ([System.IO.File]::Exists((Join-Path $dir ".nvmrc")) -or
+                [System.IO.File]::Exists((Join-Path $dir ".node-version"))) {
+                return $true
+            }
 
-        if ([System.IO.File]::Exists((Join-Path $DirectoryPath ".nvmrc")) -or
-            [System.IO.File]::Exists((Join-Path $DirectoryPath ".node-version"))) {
-            return $true
-        }
+            $pkgJson = Join-Path $dir "package.json"
+            if ([System.IO.File]::Exists($pkgJson)) {
+                try {
+                    $raw = [System.IO.File]::ReadAllText($pkgJson)
+                    if ($raw.IndexOf('"engines"', [System.StringComparison]::Ordinal) -ge 0) {
+                        return $true
+                    }
+                } catch {}
+            }
 
-        $pkgJson = Join-Path $DirectoryPath "package.json"
-        if ([System.IO.File]::Exists($pkgJson)) {
-            try {
-                $raw = [System.IO.File]::ReadAllText($pkgJson)
-                if ($raw.IndexOf('"engines"', [System.StringComparison]::Ordinal) -ge 0) {
-                    return $true
-                }
-            } catch {}
+            $parent = Split-Path -Parent $dir
+            if ((-not $parent) -or [string]::Equals($parent, $dir, [System.StringComparison]::OrdinalIgnoreCase)) {
+                break
+            }
+            $dir = $parent
         }
 
         return $false
@@ -216,7 +226,13 @@ if ($dotfilesFnmPath) {
             if (-not $global:__dotfiles_fnm_initialized) {
                 Initialize-DotfilesFnm
             }
-            & $global:__dotfiles_fnm_bin use --silent-if-unchanged | Out-Host
+            $prevStrategy = $env:FNM_VERSION_FILE_STRATEGY
+            try {
+                $env:FNM_VERSION_FILE_STRATEGY = "recursive"
+                & $global:__dotfiles_fnm_bin use --silent-if-unchanged | Out-Host
+            } finally {
+                $env:FNM_VERSION_FILE_STRATEGY = $prevStrategy
+            }
         }
     }
 
@@ -236,7 +252,8 @@ if ($dotfilesFnmPath) {
     # Hook LocationChangedAction on PowerShell 7+ so zoxide (z/j), .., ..., and
     # Push-Location/Pop-Location also trigger Set-FnmOnLoad automatically.
     $locationChangedProp = $ExecutionContext.SessionState.InvokeCommand.PSObject.Properties["LocationChangedAction"]
-    if (($null -ne $locationChangedProp) -and (-not $global:__dotfiles_fnm_location_hooked)) {
+    $locationAlreadyHooked = [bool](Get-Variable -Scope Global -Name __dotfiles_fnm_location_hooked -ValueOnly -ErrorAction SilentlyContinue)
+    if (($null -ne $locationChangedProp) -and (-not $locationAlreadyHooked)) {
         $global:__dotfiles_fnm_location_hooked = $true
         $existingAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
         if ($null -ne $existingAction) {
@@ -259,7 +276,7 @@ if ($dotfilesFnmPath) {
         Set-FnmOnLoad
     }
 
-    Remove-Variable dotfilesFnmCandidates, dotfilesFnmBinDir, candidate, aliasDir, cacheParent, tempCacheFile, pathSep, pathList, part, locationChangedProp, existingAction -ErrorAction SilentlyContinue
+    Remove-Variable dotfilesFnmCandidates, dotfilesFnmBinDir, candidate, aliasDir, aliasBinDir, cacheParent, tempCacheFile, pathSep, pathList, part, locationChangedProp, locationAlreadyHooked, existingAction -ErrorAction SilentlyContinue
 }
 
 Remove-Variable dotfilesFnmCacheDir, dotfilesFnmCacheFile, dotfilesFnmCacheInfo, dotfilesFnmCacheValid, dotfilesFnmCacheTicks, dotfilesFnmLocalEnv, dep, depInfo, dotfilesFnmPath, dotfilesFnmDefaultAlias, dotfilesFnmDirResolved, cachedLines -ErrorAction SilentlyContinue

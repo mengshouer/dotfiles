@@ -25,10 +25,28 @@ function script:Get-DotfilesToolCacheDir {
     return $cacheDir
 }
 
+function script:Get-DotfilesBinarySignature {
+    param(
+        [Parameter(Mandatory)]
+        [string]$BinaryPath
+    )
+
+    try {
+        $info = [System.IO.FileInfo]::new($BinaryPath)
+        if ($info.Exists) {
+            return "$BinaryPath|$($info.LastWriteTimeUtc.Ticks):$($info.Length)"
+        }
+    } catch {}
+
+    return $BinaryPath
+}
+
 function script:Test-DotfilesToolCacheStale {
     param(
         [Parameter(Mandatory)]
         [string]$CachePath,
+
+        [string]$ExpectedSignature = "",
 
         [string[]]$DependencyPaths = @(),
 
@@ -38,6 +56,22 @@ function script:Test-DotfilesToolCacheStale {
     $cacheInfo = [System.IO.FileInfo]::new($CachePath)
     if ((-not $cacheInfo.Exists) -or ($cacheInfo.Length -lt $MinBytes)) {
         return $true
+    }
+
+    if ($ExpectedSignature) {
+        try {
+            $reader = [System.IO.File]::OpenText($CachePath)
+            try {
+                $firstLine = $reader.ReadLine()
+            } finally {
+                $reader.Dispose()
+            }
+            if ($firstLine -ne "# DOTFILES_SOURCE_BINARY: $ExpectedSignature") {
+                return $true
+            }
+        } catch {
+            return $true
+        }
     }
 
     $cacheTicks = $cacheInfo.LastWriteTimeUtc.Ticks
@@ -76,7 +110,9 @@ function script:Resolve-DotfilesCachedToolPath {
                 $reader.Dispose()
             }
             if ($line -and $line.StartsWith("# DOTFILES_SOURCE_BINARY: ", [System.StringComparison]::Ordinal)) {
-                $cachedBinary = $line.Substring(26).Trim()
+                $cachedHeader = $line.Substring(26).Trim()
+                $pipeIndex = $cachedHeader.IndexOf('|')
+                $cachedBinary = if ($pipeIndex -ge 0) { $cachedHeader.Substring(0, $pipeIndex) } else { $cachedHeader }
                 if ($cachedBinary -and [System.IO.File]::Exists($cachedBinary)) {
                     return $cachedBinary
                 }
@@ -128,9 +164,12 @@ function Initialize-DotfilesZoxide {
     }
 
     $localEnvPath = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.env" } else { $null }
+    $localPs1Path = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.ps1" } else { $null }
+    $zoxideSig = Get-DotfilesBinarySignature -BinaryPath $zoxidePath
     $needsRefresh = Test-DotfilesToolCacheStale `
         -CachePath $cachePath `
-        -DependencyPaths @($zoxidePath, $localEnvPath, $PSCommandPath) `
+        -ExpectedSignature $zoxideSig `
+        -DependencyPaths @($zoxidePath, $localEnvPath, $localPs1Path, $PSCommandPath) `
         -MinBytes 256
 
     if ($needsRefresh) {
@@ -138,6 +177,7 @@ function Initialize-DotfilesZoxide {
             $resolvedZoxide = Resolve-DotfilesCommandPath -Name "zoxide"
             if ($resolvedZoxide) {
                 $zoxidePath = $resolvedZoxide
+                $zoxideSig = Get-DotfilesBinarySignature -BinaryPath $zoxidePath
             }
         }
 
@@ -160,7 +200,7 @@ function Initialize-DotfilesZoxide {
             '(?m)^(\s*)zoxide(\s+add\b)',
             "`$1& '$escapedZoxidePath'`$2"
         )
-        $content = "# DOTFILES_SOURCE_BINARY: $zoxidePath" + [Environment]::NewLine + $initScript
+        $content = "# DOTFILES_SOURCE_BINARY: $zoxideSig" + [Environment]::NewLine + $initScript
         Write-DotfilesToolCacheFile -CachePath $cachePath -Content $content
     }
 
@@ -186,9 +226,12 @@ function Initialize-DotfilesStarship {
     }
 
     $localEnvPath = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.env" } else { $null }
+    $localPs1Path = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.ps1" } else { $null }
+    $starshipSig = Get-DotfilesBinarySignature -BinaryPath $starshipPath
     $needsRefresh = Test-DotfilesToolCacheStale `
         -CachePath $cachePath `
-        -DependencyPaths @($starshipPath, $configPath, $localEnvPath, $PSCommandPath) `
+        -ExpectedSignature $starshipSig `
+        -DependencyPaths @($starshipPath, $configPath, $localEnvPath, $localPs1Path, $PSCommandPath) `
         -MinBytes 512
 
     if ($needsRefresh) {
@@ -196,6 +239,7 @@ function Initialize-DotfilesStarship {
             $resolvedStarship = Resolve-DotfilesCommandPath -Name "starship"
             if ($resolvedStarship) {
                 $starshipPath = $resolvedStarship
+                $starshipSig = Get-DotfilesBinarySignature -BinaryPath $starshipPath
             }
         }
 
@@ -260,7 +304,7 @@ function Initialize-DotfilesStarship {
             )
         }
 
-        $content = "# DOTFILES_SOURCE_BINARY: $starshipPath" + [Environment]::NewLine + $initScript
+        $content = "# DOTFILES_SOURCE_BINARY: $starshipSig" + [Environment]::NewLine + $initScript
         Write-DotfilesToolCacheFile -CachePath $cachePath -Content $content
     }
 
