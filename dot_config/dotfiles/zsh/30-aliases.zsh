@@ -119,15 +119,22 @@ alias ard="aria2c --summary-interval=10 -x 3 --allow-overwrite=true -Z"
 
 # Quick-edit local override files (machine-specific, not in repo).
 # Defined as functions (not aliases) so syntax highlighters can recognize them.
-elocal()      { ${EDITOR:-${VISUAL:-vi}} "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.zsh"; }
-elocalenv()   { ${EDITOR:-${VISUAL:-vi}} "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.env"; }
-egit()        { ${EDITOR:-${VISUAL:-vi}} "$HOME/.gitconfig"; }
+dotfiles_edit_file() {
+  local target="$1"
+  local parent="${target:h}"
+  local editor="${VISUAL:-${EDITOR:-vi}}"
+
+  [[ -d "$parent" ]] || command mkdir -p "$parent"
+  ${=editor} "$target"
+}
+
+elocal()     { dotfiles_edit_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.zsh"; }
+elocalenv()  { dotfiles_edit_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.env"; }
+egit()       { dotfiles_edit_file "$HOME/.gitconfig"; }
 egitignore() {
   # ~/.config/git/ignore is user-owned: chezmoi only seeds it once (create_),
   # so Git reads edits immediately with no `chezmoi apply` in between.
-  local target="$HOME/.config/git/ignore"
-  local editor="${EDITOR:-${VISUAL:-vi}}"
-  ${=editor} "$target"
+  dotfiles_edit_file "$HOME/.config/git/ignore"
 }
 
 if [[ "$OSTYPE" == linux* ]]; then

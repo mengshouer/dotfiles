@@ -24,11 +24,35 @@ dotfiles_load_env_file() {
   [[ -f "$env_file" ]] || return 0
 
   while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
     [[ -z "$line" || "$line" == \#* ]] && continue
+
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+
+    [[ "$line" == *=* ]] || continue
     key="${line%%=*}"
     value="${line#*=}"
-    [[ "$key" == "$line" ]] && continue
+
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
     [[ "$key" =~ '^[A-Za-z_][A-Za-z0-9_]*$' ]] || continue
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if (( ${#value} >= 2 )); then
+      if [[ "$value" == \"*\" ]]; then
+        value="${value#\"}"
+        value="${value%\"}"
+      elif [[ "$value" == \'*\' ]]; then
+        value="${value#\'}"
+        value="${value%\'}"
+      fi
+    fi
+
     export "$key=$value"
   done < "$env_file"
 }
@@ -42,7 +66,7 @@ dotfiles_zsh_early_path_file="$dotfiles_zsh_dir/05-path.zsh"
 zsh_path_prepend() {
   [[ -d "$1" ]] || return 0
   path=("$1" "${path[@]:#$1}")
-  typeset -U path PATH
+  typeset -gU path PATH
 }
 
 # Prompt modules need tool paths before zimfw sources modules.

@@ -15,16 +15,27 @@ function Import-DotfilesEnvFile {
             continue
         }
 
+        if ($line -match '^export\s+(.*)$') {
+            $line = $Matches[1].TrimStart()
+        }
+
         $separator = $line.IndexOf("=")
         if ($separator -lt 1) {
             continue
         }
 
         $key = $line.Substring(0, $separator).Trim()
-        $value = $line.Substring($separator + 1)
+        $value = $line.Substring($separator + 1).Trim()
 
         if ($key -notmatch "^[A-Za-z_][A-Za-z0-9_]*$") {
             continue
+        }
+
+        if ($value.Length -ge 2) {
+            if (($value.StartsWith('"', [System.StringComparison]::Ordinal) -and $value.EndsWith('"', [System.StringComparison]::Ordinal)) -or
+                ($value.StartsWith("'", [System.StringComparison]::Ordinal) -and $value.EndsWith("'", [System.StringComparison]::Ordinal))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
         }
 
         [System.Environment]::SetEnvironmentVariable($key, $value, "Process")
