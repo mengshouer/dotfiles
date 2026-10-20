@@ -25,6 +25,9 @@ if ($args.Count) {
 }
 '@.Replace('__CMD__', $Command.Replace("'", "''"))
 
+    if (Get-Alias -Name $Name -ErrorAction SilentlyContinue) {
+        Remove-Item -LiteralPath "Alias:$Name" -Force -Confirm:$false -ErrorAction SilentlyContinue
+    }
     Set-Item -LiteralPath "Function:global:$Name" -Value $body
 }
 
@@ -55,11 +58,11 @@ $aliases = [ordered]@{
     ga    = "git add"
     gaa   = "git add ."
     gct   = "git commit"
-    gp    = "git push"
+    gph   = "git push"
     gpl   = "git pull"
     gch   = "git checkout"
     gr1   = "git reset --soft HEAD~1"
-    gl    = "git log --oneline --graph"
+    glg   = "git log --oneline --graph"
 
     nr    = "npm run"
 
@@ -828,12 +831,35 @@ function global:toclip {
 function script:Invoke-DotfilesEditor {
     param([string]$Path)
 
+    $parent = Split-Path -Parent $Path
+    if ($parent -and (-not [System.IO.Directory]::Exists($parent))) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
     $editor = $env:VISUAL
     if (-not $editor) { $editor = $env:EDITOR }
     if (-not $editor) {
         if (Get-Command code -ErrorAction SilentlyContinue) { $editor = "code" }
         elseif (Get-Command notepad -ErrorAction SilentlyContinue) { $editor = "notepad" }
         else { $editor = "vi" }
+    }
+
+    if ([System.IO.File]::Exists($editor) -or (Get-Command -Name $editor -ErrorAction SilentlyContinue)) {
+        & $editor $Path
+        return
+    }
+
+    $parseErrors = $null
+    $tokens = @(
+        [System.Management.Automation.PSParser]::Tokenize($editor, [ref]$parseErrors) |
+            Where-Object { $_.Type -in @("Command", "CommandParameter", "CommandArgument", "String") } |
+            ForEach-Object { $_.Content }
+    )
+    if ($tokens.Count -gt 1) {
+        $editorCmd = $tokens[0]
+        $editorArgs = @($tokens[1..($tokens.Count - 1)]) + @($Path)
+        & $editorCmd @editorArgs
+        return
     }
 
     & $editor $Path

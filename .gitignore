@@ -14,17 +14,11 @@ Thumbs.db
 .gnupg/
 .password-store/
 
-.codex/
-.claude/
-.omx/
-.cc-switch/
 .vscode/
 
 **/local.env
 **/local.zsh
 **/local.ps1
-
-.local/
 
 *.history
 *_history

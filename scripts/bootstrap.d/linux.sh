@@ -294,7 +294,7 @@ install_fnm() {
   if (( EUID == 0 )); then
     say "  curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /usr/local/bin --skip-shell"
   else
-    say "  curl -fsSL https://fnm.vercel.app/install | bash"
+    say "  curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell"
   fi
   say ""
 }
@@ -315,9 +315,9 @@ install_uv() {
   say ""
   say "uv is not installed. Run the following command to install it:"
   if (( EUID == 0 )); then
-    say "  curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh"
+    say "  curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh"
   else
-    say "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    say "  curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh"
   fi
   say ""
 }
