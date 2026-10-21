@@ -4,11 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [dev] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev|mise] [--set-shell] [--update]
 
 Layers:
   terminal   git curl chezmoi zsh starship zoxide fzf zimfw
   dev        fnm uv
+  mise       mise under HOME (independent, opt-in)
 
 Flags:
   --set-shell   opt in to setting zsh as the default shell (chsh)
@@ -72,6 +73,10 @@ case "$layer" in
   dev)
     check_fnm_legacy_dir
     brew_install fnm uv
+    ;;
+  mise)
+    source "$script_dir/mise.sh"
+    install_mise
     ;;
 esac
 
