@@ -5,7 +5,7 @@ dotfiles_is_wsl() {
 }
 
 if dotfiles_is_wsl; then
-  (( ${+commands[wslview]} )) && export BROWSER=wslview
+  command -v wslview >/dev/null 2>&1 && export BROWSER=wslview
 
   zsh_filter_path_patterns \
     "*/Scoop/apps/nodejs*" \

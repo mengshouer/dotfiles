@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="$HOME/.bashrc"
+managed_start='# >>> chezmoi dotfiles bash start >>>'
+managed_end='# <<< chezmoi dotfiles bash end <<<'
+managed_body='[[ -f "$HOME/.config/dotfiles/bash/entry.bash" ]] && source "$HOME/.config/dotfiles/bash/entry.bash"'
+
+if [[ "${DOTFILES_ENABLE_BASH:-0}" != "1" ]] &&
+   ! { [[ -f "$target" ]] && grep -Fq "$managed_start" "$target"; } &&
+   { command -v zsh >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; }; then
+  exit 0
+fi
+
+if [[ -L "$target" && ! -e "$target" ]]; then
+  printf '%s: refusing to modify a broken symlink\n' "$target" >&2
+  exit 1
+fi
+if [[ -e "$target" && ! -f "$target" ]]; then
+  printf '%s: bashrc target is not a regular file\n' "$target" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$target")"
+touch "$target"
+
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+awk \
+  -v target="$target" \
+  -v managed_start="$managed_start" \
+  -v managed_end="$managed_end" \
+  -v managed_body="$managed_body" '
+{
+  lines[++line_count] = $0
+  if ($0 == managed_start) {
+    start_count++
+    start_index = line_count
+  }
+  if ($0 == managed_end) {
+    end_count++
+    end_index = line_count
+  }
+}
+END {
+  if (start_count != end_count) {
+    printf "%s: managed bash block markers are unbalanced\n", target > "/dev/stderr"
+    exit 1
+  }
+
+  if (start_count > 1) {
+    printf "%s: multiple managed bash blocks found\n", target > "/dev/stderr"
+    exit 1
+  }
+
+  out_count = 0
+
+  if (start_count == 1) {
+    if (end_index <= start_index) {
+      printf "%s: managed bash block end marker appears before start marker\n", target > "/dev/stderr"
+      exit 1
+    }
+
+    prefix_end = start_index - 1
+    while (prefix_end > 0 && lines[prefix_end] == "") {
+      prefix_end--
+    }
+
+    suffix_start = end_index + 1
+    while (suffix_start <= line_count && lines[suffix_start] == "") {
+      suffix_start++
+    }
+
+    for (i = 1; i <= prefix_end; i++) {
+      out[++out_count] = lines[i]
+    }
+    if (out_count > 0) {
+      out[++out_count] = ""
+    }
+    out[++out_count] = managed_start
+    out[++out_count] = managed_body
+    out[++out_count] = managed_end
+
+    if (suffix_start <= line_count) {
+      out[++out_count] = ""
+      for (i = suffix_start; i <= line_count; i++) {
+        out[++out_count] = lines[i]
+      }
+    }
+  } else {
+    last = line_count
+    while (last > 0 && lines[last] == "") {
+      last--
+    }
+
+    for (i = 1; i <= last; i++) {
+      out[++out_count] = lines[i]
+    }
+    if (out_count > 0) {
+      out[++out_count] = ""
+    }
+    out[++out_count] = managed_start
+    out[++out_count] = managed_body
+    out[++out_count] = managed_end
+  }
+
+  for (i = 1; i <= out_count; i++) {
+    print out[i]
+  }
+}
+' "$target" > "$tmp_file"
+
+if command cmp -s "$tmp_file" "$target"; then
+  exit 0
+fi
+
+cat "$tmp_file" > "$target"

@@ -24,9 +24,12 @@ Library/Caches/mise
 Library/Caches/mise/**
 
 {{ if eq .chezmoi.os "windows" }}
+.bashrc
 .zshrc
 .zimrc
 .zshenv
+.config/dotfiles/bash
+.config/dotfiles/bash/**
 .config/dotfiles/zsh
 .config/dotfiles/zsh/**
 .local
@@ -34,6 +37,7 @@ Library/Caches/mise/**
 .chezmoiscripts/apply_protect-overwrite.sh
 .chezmoiscripts/apply_ensure-gitconfig-include.sh
 .chezmoiscripts/apply_reconcile-zshenv-block.sh
+.chezmoiscripts/apply_upsert-bashrc-block.sh
 .chezmoiscripts/apply_upsert-zshrc-block.sh
 {{ else }}
 Documents

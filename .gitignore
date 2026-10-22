@@ -17,6 +17,7 @@ Thumbs.db
 .vscode/
 
 **/local.env
+**/local.bash
 **/local.zsh
 **/local.ps1
 

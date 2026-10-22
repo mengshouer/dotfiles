@@ -52,8 +52,8 @@ Default layer is `terminal`; `dev` installs `fnm` and `uv`.
 
 The optional `mise` layer (`bash scripts/bootstrap mise`, Linux and macOS) installs mise's official per-user layout through mise's own installer (not Homebrew): the binary at `~/.local/bin/mise`, with installs and shims under `~/.local/share/mise`.
 Tool lists, installs and lockfiles remain machine-local and are not managed by chezmoi.
-Its zsh integration keeps the shims on `PATH` (the binary directory is already on `PATH`) and provides `mise_activate`/`mise_deactivate` plus the related `mise_*` helper functions; the layout is fixed, so a mise installed elsewhere (for example by Homebrew) is not detected.
-Interactive shells activate mise after the first prompt with `zsh-defer`, so startup stays fast (without `zsh-defer` the activation runs immediately); `mise_deactivate` opts the current shell out.
+Its zsh/bash integration keeps the shims on `PATH` (the binary directory is already on `PATH`) and provides `mise_activate`/`mise_deactivate` plus the related `mise_*` helper functions; the layout is fixed, so a mise installed elsewhere (for example by Homebrew) is not detected.
+Interactive shells activate mise after the first prompt with `zsh-defer` on zsh (or during startup on bash), so startup stays fast; `mise_deactivate` opts the current shell out.
 On macOS the mise shims and `~/.local/bin` come before Homebrew in `PATH`, so a mise-installed tool shadows the same-named Homebrew command.
 
 ## Update
@@ -79,10 +79,12 @@ Unix `terminal` update also runs `zimfw update`.
 
 ## Notes
 
-- Unix `--set-shell` opts in to setting zsh as the default shell (`chsh`, or `usermod -s` when `chsh` is unavailable), and skips when zsh is already the login shell.
+- Unix `--set-shell` opts in to setting the selected shell (zsh by default, or bash with `--bash`) as the default shell (`chsh`, or `usermod -s` when `chsh` is unavailable), and skips when it is already the login shell.
+- Pass `--bash` (`bash scripts/bootstrap --bash`) on machines where installing zsh is impractical (zsh remains the recommended primary shell; bash is a fallback and is not recommended as the first choice): it skips `zsh`/`zimfw`, installs `bash-completion`, and enables `~/.bashrc` (`~/.config/dotfiles/bash/entry.bash`). A plain `chezmoi apply` only touches `~/.bashrc` when bash mode is requested (`DOTFILES_ENABLE_BASH=1 chezmoi apply`), when the managed block already exists, or when zsh is not installed; `~/.zshrc` keeps being updated whenever zsh is installed.
+- The bash integration sources the same modules as zsh and requires bash 4.2+ (the macOS system bash 3.2 is ignored silently), and it only owns `~/.bashrc`, so a login shell that reads nothing but `~/.bash_profile` is not bridged. Interactive features degrade on purpose (no syntax highlighting, inline autosuggestions, or deferred startup; `fnm` initializes on the first `fnm` call without the `cd` hook, and mise activates during startup instead of after the first prompt).
 - `terminal` installs system packages with Homebrew, apt, or dnf/yum; when the distro has no `fzf` package it falls back to the official release binary (Linux `amd64`/`arm64`).
 - Unix `DOTFILES_BOOTSTRAP_BIN_DIR` overrides the installer bin directory for that run.
 - On macOS, Homebrew installs `fnm`, while its data directory defaults to `${XDG_DATA_HOME:-$HOME/.local/share}/fnm` and must not contain whitespace. If only the legacy `~/Library/Application Support/fnm` directory exists, `bootstrap dev` stops and prints the manual migration commands.
 - Unix bootstrap prints the exact `export PATH=...` command when a newly installed `chezmoi` is outside the current shell's `PATH`.
-- Local overrides live under `~/.config/dotfiles/`, `~/.gitconfig`, and `~/.config/git/ignore`; the last is seeded once by chezmoi and then user-owned, so Git picks up edits immediately.
+- Local overrides live under `~/.config/dotfiles/`, `~/.gitconfig`, and `~/.config/git/ignore`; the last is seeded once by chezmoi and then user-owned, so Git picks up edits immediately. `elocal` opens `local.zsh` or `local.bash` depending on the shell that is running.
 - Git baseline settings are managed in `~/.config/git/base.gitconfig`; `chezmoi apply` adds a missing include without replacing existing local Git settings.

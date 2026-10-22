@@ -6,6 +6,20 @@ managed_start='# >>> chezmoi dotfiles zsh start >>>'
 managed_end='# <<< chezmoi dotfiles zsh end <<<'
 managed_body='source "$HOME/.config/dotfiles/zsh/entry.zsh"'
 
+if ! command -v zsh >/dev/null 2>&1 &&
+   ! { [[ -f "$target" ]] && grep -Fq "$managed_start" "$target"; }; then
+  exit 0
+fi
+
+if [[ -L "$target" && ! -e "$target" ]]; then
+  printf '%s: refusing to modify a broken symlink\n' "$target" >&2
+  exit 1
+fi
+if [[ -e "$target" && ! -f "$target" ]]; then
+  printf '%s: zshrc target is not a regular file\n' "$target" >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$target")"
 touch "$target"
 
@@ -95,5 +109,9 @@ END {
   }
 }
 ' "$target" > "$tmp_file"
+
+if command cmp -s "$tmp_file" "$target"; then
+  exit 0
+fi
 
 cat "$tmp_file" > "$target"

@@ -1,17 +1,20 @@
 # PATH setup and runtime package manager detection.
 
-typeset -U path PATH
-
 if (( EUID == 0 )); then
   root_home="${dotfiles_home:-}"
   [[ -n "$root_home" ]] || root_home=~root
 
   # Drop unsafe inherited entries. Keep in sync with
   # bootstrap_remove_root_unsafe_paths in scripts/bootstrap.d/lib.sh.
-  path=("${(M)path[@]:#/*}")
-  path=("${path[@]:#(/home|/Users|/tmp|/var/tmp)(|/*)}")
-  path=("${path[@]:#/opt/homebrew/(bin|sbin)}")
-  [[ -x /usr/local/bin/brew ]] && path=("${path[@]:#/usr/local/(bin|sbin)}")
+  zsh_filter_path_patterns \
+    "" \
+    "[!/]*" \
+    "/home" "/home/*" \
+    "/Users" "/Users/*" \
+    "/tmp" "/tmp/*" \
+    "/var/tmp" "/var/tmp/*" \
+    "/opt/homebrew/bin" "/opt/homebrew/sbin"
+  [[ -x /usr/local/bin/brew ]] && zsh_filter_path_patterns "/usr/local/bin" "/usr/local/sbin"
 
   zsh_path_prepend "$root_home/bin"
   zsh_path_prepend "$root_home/.local/bin"

@@ -41,7 +41,11 @@ zsh_init_fnm() {
   fi
 
   if [[ -z "${XDG_RUNTIME_DIR:-}" || ! -d "$XDG_RUNTIME_DIR" || ! -w "$XDG_RUNTIME_DIR" ]]; then
-    export XDG_RUNTIME_DIR="/tmp"
+    local fnm_home="$HOME"
+    (( EUID == 0 )) && fnm_home=~root
+    local fallback_runtime_dir="${XDG_CACHE_HOME:-$fnm_home/.cache}/fnm-runtime"
+    command mkdir -p -m 0700 "$fallback_runtime_dir" 2>/dev/null || return 0
+    export XDG_RUNTIME_DIR="$fallback_runtime_dir"
   fi
 
   zsh_optional_eval command fnm env --use-on-cd --shell zsh

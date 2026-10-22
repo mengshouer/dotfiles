@@ -4,15 +4,16 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [terminal|dev|mise] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev|mise] [--bash] [--set-shell] [--update]
 
 Layers:
-  terminal   git curl chezmoi zsh starship zoxide fzf zimfw
+  terminal   git curl chezmoi zsh starship zoxide fzf zimfw (or bash + bash-completion@2 with --bash)
   dev        fnm uv
   mise       mise under HOME (independent, opt-in)
 
 Flags:
-  --set-shell   opt in to setting zsh as the default shell (chsh)
+  --bash        use bash instead of zsh for the terminal layer and enable ~/.bashrc integration
+  --set-shell   opt in to setting the selected shell (zsh by default, or bash with --bash) as the default shell
   --update      git pull --ff-only, apply dotfiles, update zimfw
 EOF
 }
@@ -68,7 +69,11 @@ check_fnm_legacy_dir() {
 
 case "$layer" in
   terminal)
-    brew_install git curl chezmoi zsh starship zoxide fzf
+    if (( use_bash )); then
+      brew_install git curl chezmoi bash bash-completion@2 starship zoxide fzf
+    else
+      brew_install git curl chezmoi zsh starship zoxide fzf
+    fi
     ;;
   dev)
     check_fnm_legacy_dir
@@ -83,7 +88,11 @@ esac
 apply_after_update
 
 if [[ "$layer" == "terminal" ]]; then
-  install_zimfw
+  if (( use_bash )); then
+    enable_bash_rc_block "$repo_root"
+  else
+    install_zimfw
+  fi
 fi
 
 set_shell_if_requested

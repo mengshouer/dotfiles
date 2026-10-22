@@ -25,21 +25,3 @@ zsh_optional_eval() {
   init_script="$("$@" 2>/dev/null)" || return 0
   [[ -n "$init_script" ]] && eval "$init_script"
 }
-
-zsh_filter_path_patterns() {
-  local entry pattern
-  local -a filtered patterns
-
-  patterns=("$@")
-  for entry in "${path[@]}"; do
-    for pattern in "${patterns[@]}"; do
-      case "$entry" in
-        ${~pattern}) continue 2 ;;
-      esac
-    done
-    filtered+=("$entry")
-  done
-
-  path=("${filtered[@]}")
-  typeset -gU path PATH
-}
