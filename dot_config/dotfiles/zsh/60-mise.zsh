@@ -18,6 +18,8 @@ zsh_mise_global() {
   # Run global-tool operations from HOME so a project mise.toml cannot be
   # accidentally included when the command is called inside a repository.
   (
+    chpwd_functions=()
+    unset -f chpwd 2>/dev/null || true
     builtin cd -- "$mise_home" || return 1
     MISE_CEILING_PATHS="$mise_home" "$mise_home/.local/bin/mise" "$@"
   )
@@ -34,11 +36,18 @@ zsh_mise_refresh_completions() {
   [[ -n "$script" ]] || return 0
 
   [[ -d "$completions_dir" ]] || command mkdir -p "$completions_dir" 2>/dev/null || return 0
-  if print -r -- "$script" >| "$tmp_file" 2>/dev/null && command mv -f "$tmp_file" "$completion_file" 2>/dev/null; then
-    zsh_fpath_prepend "$completions_dir"
-  else
-    command rm -f "$tmp_file" 2>/dev/null || true
+  if print -r -- "$script" >| "$tmp_file" 2>/dev/null; then
+    if [[ -s "$completion_file" ]] && command cmp -s "$tmp_file" "$completion_file" 2>/dev/null; then
+      command rm -f "$tmp_file" 2>/dev/null || true
+      zsh_fpath_prepend "$completions_dir"
+      return 0
+    fi
+    if command mv -f "$tmp_file" "$completion_file" 2>/dev/null; then
+      zsh_fpath_prepend "$completions_dir"
+      return 0
+    fi
   fi
+  command rm -f "$tmp_file" 2>/dev/null || true
 }
 
 mise_activate() {

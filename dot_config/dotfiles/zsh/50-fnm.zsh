@@ -70,6 +70,7 @@ _dotfiles_fnm_lazy_chpwd() {
     else
       FNM_VERSION_FILE_STRATEGY=recursive command fnm use --silent-if-unchanged
     fi
+    zle && zle reset-prompt 2>/dev/null || true
   fi
 }
 
@@ -121,7 +122,7 @@ zsh_setup_fnm() {
 
     add-zsh-hook -D chpwd _dotfiles_fnm_lazy_chpwd
     add-zsh-hook chpwd _dotfiles_fnm_lazy_chpwd
-    zsh_defer_or_run _dotfiles_fnm_lazy_chpwd
+    zsh_defer_or_run -dmpr _dotfiles_fnm_lazy_chpwd
   else
     zsh_defer_or_run zsh_init_fnm
   fi

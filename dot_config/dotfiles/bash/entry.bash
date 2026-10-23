@@ -125,6 +125,13 @@ zsh_fpath_prepend() {
 }
 
 zsh_defer_or_run() {
+  while [[ "${1:-}" == [-+]* ]]; do
+    case "$1" in
+      -t) shift 2 || break ;;
+      --) shift; break ;;
+      *) shift ;;
+    esac
+  done
   "$@"
 }
 
@@ -288,7 +295,7 @@ bash_setup_fnm() {
 # If re-sourcing ~/.bashrc in an active starship session, unwrap
 # STARSHIP_PROMPT_COMMAND first so hooks are not duplicated or placed before
 # starship_precmd (which would clobber $? before starship captures it).
-if [[ -n "${STARSHIP_PROMPT_COMMAND:-}" && "${PROMPT_COMMAND:-}" == "starship_precmd" ]]; then
+if [[ -n "${STARSHIP_PROMPT_COMMAND:-}" && "${PROMPT_COMMAND:-}" == starship_precmd* ]]; then
   PROMPT_COMMAND="$STARSHIP_PROMPT_COMMAND"
   unset STARSHIP_PROMPT_COMMAND
 fi
@@ -396,7 +403,6 @@ bash_source_cached_tool_init() {
   source "$cache_file"
 }
 
-bash_source_cached_tool_init zoxide init bash
 bash_source_cached_tool_init fzf --bash
 if declare -F starship_precmd >/dev/null 2>&1; then
   dotfiles_saved_ps0="${PS0-}"
@@ -406,7 +412,13 @@ if declare -F starship_precmd >/dev/null 2>&1; then
 else
   bash_source_cached_tool_init starship init bash --print-full-init
 fi
-unset STARSHIP_START_TIME
+# shellcheck disable=SC2034
+STARSHIP_START_TIME=""
+# Initialize zoxide after starship so `__zoxide_hook` is appended after
+# `starship_precmd` in PROMPT_COMMAND (`starship_precmd;__zoxide_hook`):
+# starship still runs first to capture $?, while `__zoxide_doctor` sees
+# `__zoxide_hook` in PROMPT_COMMAND without false-positive warnings.
+bash_source_cached_tool_init zoxide init bash
 
 # Final local override. This file is intentionally ignored by git/chezmoi.
 local_bash="$dotfiles_config_home/dotfiles/local.bash"

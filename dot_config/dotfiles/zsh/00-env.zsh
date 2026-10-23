@@ -15,6 +15,13 @@ zsh_defer_or_run() {
   if (( $+functions[zsh-defer] )); then
     zsh-defer "$@"
   else
+    while [[ "${1:-}" == [-+]* ]]; do
+      case "$1" in
+        -t) shift 2 || break ;;
+        --) shift; break ;;
+        *) shift ;;
+      esac
+    done
     "$@"
   fi
 }

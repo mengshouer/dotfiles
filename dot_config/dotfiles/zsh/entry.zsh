@@ -10,7 +10,7 @@ if (( EUID == 0 )); then
   # Drop env vars leaked from a normal user's session or pointing to unsafe
   # locations; keep root's own values.
   for dotfiles_env_var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_RUNTIME_DIR ZDOTDIR ZIM_CONFIG_FILE MISE_HOME MISE_CONFIG_DIR MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_TMP_DIR MISE_DOWNLOADS_DIR MISE_SHIMS_DIR MISE_RUSTUP_HOME MISE_CARGO_HOME; do
-    case "${(P)dotfiles_env_var}" in
+    case "${(P)dotfiles_env_var:-}" in
       "") ;;
       [!/]*|/home|/home/*|/Users|/Users/*|/tmp|/tmp/*|/var/tmp|/var/tmp/*|/run/user/[!0]*)
         unset "$dotfiles_env_var"
@@ -120,6 +120,9 @@ ZIM_HOME="${ZDOTDIR:-$dotfiles_home}/.zim"
 ZSH_CACHE_DIR="$dotfiles_cache_home/zsh"
 [[ -d "$ZSH_CACHE_DIR" ]] || command mkdir -p "$ZSH_CACHE_DIR"
 zstyle ':zim:completion' dumpfile "$ZSH_CACHE_DIR/.zcompdump"
+dotfiles_stale_dumps=("$ZSH_CACHE_DIR"/.zcompdump.*.*(Nmm+5))
+(( ${#dotfiles_stale_dumps} )) && command rm -f -- "${dotfiles_stale_dumps[@]}" 2>/dev/null
+unset dotfiles_stale_dumps
 
 zimrc_file="${ZIM_CONFIG_FILE:-${ZDOTDIR:-$dotfiles_home}/.zimrc}"
 zimfw_file="$ZIM_HOME/zimfw.zsh"

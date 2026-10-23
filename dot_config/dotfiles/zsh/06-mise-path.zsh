@@ -23,7 +23,7 @@ zsh_mise_prepare() {
   zsh_path_prepend "$MISE_DATA_DIR/shims"
 
   local completions_dir="$MISE_DATA_DIR/completions/${dotfiles_shell:-zsh}"
-  if [[ -d "$completions_dir" ]]; then
+  if [[ -s "$completions_dir/_mise" ]]; then
     zsh_fpath_prepend "$completions_dir"
   fi
 }

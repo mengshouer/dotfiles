@@ -66,5 +66,5 @@ if (( ! $+functions[prompt_starship_precmd] )); then
   zsh_optional_eval starship init zsh
 fi
 
-zsh_defer_or_run zsh_source_cached_tool_init zoxide init zsh
-zsh_defer_or_run zsh_source_cached_tool_init fzf --zsh
+zsh_defer_or_run -dmpr zsh_source_cached_tool_init zoxide init zsh
+zsh_defer_or_run -dmpr zsh_source_cached_tool_init fzf --zsh
