@@ -1,19 +1,23 @@
 # Python virtual environment helpers.
 
-function Enable-DotfilesVenv {
+function global:Enable-DotfilesVenv {
     param(
         [string]$Path = ".venv"
     )
 
     $candidates = @(
         $Path,
-        (Join-Path $Path "Scripts\Activate.ps1"),
-        (Join-Path $Path ".venv\Scripts\Activate.ps1")
+        [System.IO.Path]::Combine($Path, "Scripts\Activate.ps1"),
+        [System.IO.Path]::Combine($Path, ".venv\Scripts\Activate.ps1")
     )
 
-    $activate = $candidates |
-        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
-        Select-Object -First 1
+    $activate = $null
+    foreach ($candidate in $candidates) {
+        if ($candidate -and [System.IO.File]::Exists($candidate)) {
+            $activate = $candidate
+            break
+        }
+    }
 
     if (-not $activate) {
         Write-Error "No PowerShell virtual environment activation script found for '$Path'."
@@ -24,10 +28,10 @@ function Enable-DotfilesVenv {
     . $activate
 }
 
-Set-Alias -Name venv -Value Enable-DotfilesVenv
-Set-Alias -Name va -Value Enable-DotfilesVenv
+function global:venv { Enable-DotfilesVenv @args }
+function global:va   { Enable-DotfilesVenv @args }
 
-function Disable-DotfilesVenv {
+function global:Disable-DotfilesVenv {
     if (Get-Command deactivate -ErrorAction SilentlyContinue) {
         deactivate
         return
@@ -36,4 +40,4 @@ function Disable-DotfilesVenv {
     Write-Host "No active Python virtual environment."
 }
 
-Set-Alias -Name vde -Value Disable-DotfilesVenv
+function global:vde  { Disable-DotfilesVenv @args }

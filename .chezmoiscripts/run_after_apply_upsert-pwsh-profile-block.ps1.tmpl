@@ -1,0 +1,157 @@
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = "Stop"
+
+$targets = @(
+    [System.IO.Path]::Combine($HOME, "Documents\PowerShell\Microsoft.PowerShell_profile.ps1"),
+    [System.IO.Path]::Combine($HOME, "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1")
+)
+
+$managedStart = '# >>> chezmoi dotfiles pwsh start >>>'
+$managedEnd   = '# <<< chezmoi dotfiles pwsh end <<<'
+$managedBlock = @(
+    $managedStart,
+    '$global:__dotfiles_profile_cache_ok = $false',
+    'if ($env:LOCALAPPDATA -and [System.IO.File]::Exists("$env:LOCALAPPDATA\dotfiles\profile.pwsh$($PSVersionTable.PSVersion.Major).cached.ps1")) {',
+    '    . "$env:LOCALAPPDATA\dotfiles\profile.pwsh$($PSVersionTable.PSVersion.Major).cached.ps1"',
+    '}',
+    'if (-not $global:__dotfiles_profile_cache_ok) {',
+    '    $global:__dotfiles_profile_cache_miss = $true',
+    '    if ([System.IO.File]::Exists("$HOME\.config\dotfiles\pwsh\00-profile-loader.ps1")) {',
+    '        . "$HOME\.config\dotfiles\pwsh\00-profile-loader.ps1"',
+    '    }',
+    '}',
+    $managedEnd
+)
+
+# Legacy full-file template lines from before block-based management.
+# Stripped once when migrating an existing profile that has no block markers yet.
+$legacyLines = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($legacy in @(
+    '# PowerShell 7 profile managed by chezmoi.',
+    '# Windows PowerShell 5.1 profile managed by chezmoi.',
+    '$dotfilesProfileLoader = Join-Path $HOME ".config\dotfiles\pwsh\00-profile-loader.ps1"',
+    'if (Test-Path -LiteralPath $dotfilesProfileLoader -PathType Leaf) {',
+    '    . $dotfilesProfileLoader',
+    '}',
+    'Remove-Variable dotfilesProfileLoader -ErrorAction SilentlyContinue',
+    'if ([System.IO.File]::Exists([System.IO.Path]::Combine($HOME, ".config\dotfiles\pwsh\00-profile-loader.ps1"))) {',
+    '    . ([System.IO.Path]::Combine($HOME, ".config\dotfiles\pwsh\00-profile-loader.ps1"))',
+    '}',
+    '$global:__dotfiles_profile_cache_ok = $false',
+    'if ($env:LOCALAPPDATA -and [System.IO.File]::Exists("$env:LOCALAPPDATA\dotfiles\profile.pwsh7.cached.ps1")) {',
+    '    . "$env:LOCALAPPDATA\dotfiles\profile.pwsh7.cached.ps1"',
+    'if ($env:LOCALAPPDATA -and [System.IO.File]::Exists("$env:LOCALAPPDATA\dotfiles\profile.pwsh5.cached.ps1")) {',
+    '    . "$env:LOCALAPPDATA\dotfiles\profile.pwsh5.cached.ps1"',
+    'if (-not $global:__dotfiles_profile_cache_ok) {',
+    '    $global:__dotfiles_profile_cache_miss = $true',
+    '    if ([System.IO.File]::Exists("$HOME\.config\dotfiles\pwsh\00-profile-loader.ps1")) {',
+    '        . "$HOME\.config\dotfiles\pwsh\00-profile-loader.ps1"',
+    '    }'
+)) {
+    [void]$legacyLines.Add($legacy)
+}
+
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+foreach ($target in $targets) {
+    $parent = [System.IO.Path]::GetDirectoryName($target)
+    if ($parent -and (-not [System.IO.Directory]::Exists($parent))) {
+        [void][System.IO.Directory]::CreateDirectory($parent)
+    }
+
+    $lines = if ([System.IO.File]::Exists($target)) {
+        [System.IO.File]::ReadAllLines($target)
+    } else {
+        [string[]]::new(0)
+    }
+
+    $startIndexes = [System.Collections.Generic.List[int]]::new()
+    $endIndexes = [System.Collections.Generic.List[int]]::new()
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        if ($lines[$i] -eq $managedStart) {
+            $startIndexes.Add($i)
+        }
+        if ($lines[$i] -eq $managedEnd) {
+            $endIndexes.Add($i)
+        }
+    }
+
+    if ($startIndexes.Count -ne $endIndexes.Count) {
+        [Console]::Error.WriteLine("${target}: managed pwsh block markers are unbalanced")
+        exit 1
+    }
+
+    if ($startIndexes.Count -gt 1) {
+        [Console]::Error.WriteLine("${target}: multiple managed pwsh blocks found")
+        exit 1
+    }
+
+    $rebuilt = [System.Collections.Generic.List[string]]::new()
+
+    if ($startIndexes.Count -eq 1) {
+        $startIndex = $startIndexes[0]
+        $endIndex = $endIndexes[0]
+
+        if ($endIndex -le $startIndex) {
+            [Console]::Error.WriteLine("${target}: managed pwsh block end marker appears before start marker")
+            exit 1
+        }
+
+        $prefixEnd = $startIndex - 1
+        while ($prefixEnd -ge 0 -and $lines[$prefixEnd].Trim().Length -eq 0) {
+            $prefixEnd--
+        }
+
+        $suffixStart = $endIndex + 1
+        while ($suffixStart -lt $lines.Length -and $lines[$suffixStart].Trim().Length -eq 0) {
+            $suffixStart++
+        }
+
+        for ($i = 0; $i -le $prefixEnd; $i++) {
+            $rebuilt.Add($lines[$i])
+        }
+        if ($rebuilt.Count -gt 0) {
+            $rebuilt.Add("")
+        }
+        foreach ($line in $managedBlock) {
+            $rebuilt.Add($line)
+        }
+        if ($suffixStart -lt $lines.Length) {
+            $rebuilt.Add("")
+            for ($i = $suffixStart; $i -lt $lines.Length; $i++) {
+                $rebuilt.Add($lines[$i])
+            }
+        }
+    } else {
+        $filtered = [System.Collections.Generic.List[string]]::new()
+        foreach ($line in $lines) {
+            if (-not $legacyLines.Contains($line)) {
+                $filtered.Add($line)
+            }
+        }
+        $last = $filtered.Count - 1
+        while ($last -ge 0 -and $filtered[$last].Trim().Length -eq 0) {
+            $last--
+        }
+        for ($i = 0; $i -le $last; $i++) {
+            $rebuilt.Add($filtered[$i])
+        }
+        if ($rebuilt.Count -gt 0) {
+            $rebuilt.Add("")
+        }
+        foreach ($line in $managedBlock) {
+            $rebuilt.Add($line)
+        }
+    }
+
+    $newContent = ($rebuilt -join [Environment]::NewLine) + [Environment]::NewLine
+    $existingContent = if ([System.IO.File]::Exists($target)) {
+        [System.IO.File]::ReadAllText($target)
+    } else {
+        $null
+    }
+
+    if ($newContent -ne $existingContent) {
+        [System.IO.File]::WriteAllText($target, $newContent, $utf8NoBom)
+    }
+}

@@ -11,15 +11,15 @@ function script:Get-DotfilesToolCacheDir {
         $baseDir = if ($env:XDG_CACHE_HOME) {
             $env:XDG_CACHE_HOME
         } elseif ($HOME) {
-            Join-Path $HOME ".cache"
+            [System.IO.Path]::Combine($HOME, ".cache")
         } else {
             [System.IO.Path]::GetTempPath()
         }
     }
 
-    $cacheDir = Join-Path $baseDir $Name
+    $cacheDir = [System.IO.Path]::Combine($baseDir, $Name)
     if (-not [System.IO.Directory]::Exists($cacheDir)) {
-        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+        [void][System.IO.Directory]::CreateDirectory($cacheDir)
     }
 
     return $cacheDir
@@ -41,10 +41,34 @@ function script:Get-DotfilesBinarySignature {
     return $BinaryPath
 }
 
+function script:Get-DotfilesCacheHeaderLine {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CachePath
+    )
+
+    if (-not [System.IO.File]::Exists($CachePath)) {
+        return $null
+    }
+
+    try {
+        $reader = [System.IO.File]::OpenText($CachePath)
+        try {
+            return $reader.ReadLine()
+        } finally {
+            $reader.Dispose()
+        }
+    } catch {
+        return $null
+    }
+}
+
 function script:Test-DotfilesToolCacheStale {
     param(
         [Parameter(Mandatory)]
         [string]$CachePath,
+
+        [string]$HeaderLine = $null,
 
         [string]$ExpectedSignature = "",
 
@@ -59,17 +83,8 @@ function script:Test-DotfilesToolCacheStale {
     }
 
     if ($ExpectedSignature) {
-        try {
-            $reader = [System.IO.File]::OpenText($CachePath)
-            try {
-                $firstLine = $reader.ReadLine()
-            } finally {
-                $reader.Dispose()
-            }
-            if ($firstLine -ne "# DOTFILES_SOURCE_BINARY: $ExpectedSignature") {
-                return $true
-            }
-        } catch {
+        $firstLine = if ($null -ne $HeaderLine) { $HeaderLine } else { Get-DotfilesCacheHeaderLine -CachePath $CachePath }
+        if ($firstLine -ne "# DOTFILES_SOURCE_BINARY: $ExpectedSignature") {
             return $true
         }
     }
@@ -97,36 +112,25 @@ function script:Resolve-DotfilesCachedToolPath {
         [Parameter(Mandatory)]
         [string]$Name,
 
-        [Parameter(Mandatory)]
-        [string]$CachePath
+        [string]$HeaderLine = $null
     )
 
-    if ([System.IO.File]::Exists($CachePath)) {
-        try {
-            $reader = [System.IO.File]::OpenText($CachePath)
-            try {
-                $line = $reader.ReadLine()
-            } finally {
-                $reader.Dispose()
-            }
-            if ($line -and $line.StartsWith("# DOTFILES_SOURCE_BINARY: ", [System.StringComparison]::Ordinal)) {
-                $cachedHeader = $line.Substring(26).Trim()
-                $pipeIndex = $cachedHeader.IndexOf('|')
-                $cachedBinary = if ($pipeIndex -ge 0) { $cachedHeader.Substring(0, $pipeIndex) } else { $cachedHeader }
-                if ($cachedBinary -and [System.IO.File]::Exists($cachedBinary)) {
-                    return $cachedBinary
-                }
-            }
-        } catch {}
+    if ($HeaderLine -and $HeaderLine.StartsWith("# DOTFILES_SOURCE_BINARY: ", [System.StringComparison]::Ordinal)) {
+        $cachedHeader = $HeaderLine.Substring(26).Trim()
+        $pipeIndex = $cachedHeader.IndexOf('|')
+        $cachedBinary = if ($pipeIndex -ge 0) { $cachedHeader.Substring(0, $pipeIndex) } else { $cachedHeader }
+        if ($cachedBinary -and [System.IO.File]::Exists($cachedBinary)) {
+            return $cachedBinary
+        }
     }
 
-    if (Get-Command Resolve-DotfilesCommandPath -ErrorAction SilentlyContinue) {
+    if ($null -ne ${function:Resolve-DotfilesCommandPath}) {
         return (Resolve-DotfilesCommandPath -Name $Name)
     }
 
-    $cmd = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd) {
-        return $cmd.Source
+    $cmds = @(Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue)
+    if ($cmds.Count -gt 0) {
+        return $cmds[0].Source
     }
 
     return $null
@@ -144,7 +148,14 @@ function script:Write-DotfilesToolCacheFile {
     $tempPath = "$CachePath.$PID.tmp"
     try {
         [System.IO.File]::WriteAllText($tempPath, $Content, [System.Text.UTF8Encoding]::new($true))
-        Move-Item -LiteralPath $tempPath -Destination $CachePath -Force -ErrorAction Stop
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            [System.IO.File]::Move($tempPath, $CachePath, $true)
+        } else {
+            if ([System.IO.File]::Exists($CachePath)) {
+                [System.IO.File]::Delete($CachePath)
+            }
+            [System.IO.File]::Move($tempPath, $CachePath)
+        }
     } catch {
         try {
             [System.IO.File]::WriteAllText($CachePath, $Content, [System.Text.UTF8Encoding]::new($true))
@@ -157,23 +168,27 @@ function script:Write-DotfilesToolCacheFile {
 }
 
 function Initialize-DotfilesZoxide {
-    $cachePath = Join-Path (Get-DotfilesToolCacheDir -Name "zoxide") "init.cached.ps1"
-    $zoxidePath = Resolve-DotfilesCachedToolPath -Name "zoxide" -CachePath $cachePath
+    $global:__dotfiles_zoxide_bin = $null
+    $global:__dotfiles_zoxide_cache = $null
+    $cachePath = [System.IO.Path]::Combine((Get-DotfilesToolCacheDir -Name "zoxide"), "init.cached.ps1")
+    $headerLine = Get-DotfilesCacheHeaderLine -CachePath $cachePath
+    $zoxidePath = Resolve-DotfilesCachedToolPath -Name "zoxide" -HeaderLine $headerLine
     if (-not $zoxidePath) {
         return
     }
 
-    $localEnvPath = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.env" } else { $null }
-    $localPs1Path = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.ps1" } else { $null }
+    $localEnvPath = if ($HOME) { [System.IO.Path]::Combine($HOME, ".config\dotfiles\local.env") } else { $null }
+    $localPs1Path = if ($HOME) { [System.IO.Path]::Combine($HOME, ".config\dotfiles\local.ps1") } else { $null }
     $zoxideSig = Get-DotfilesBinarySignature -BinaryPath $zoxidePath
     $needsRefresh = Test-DotfilesToolCacheStale `
         -CachePath $cachePath `
+        -HeaderLine $headerLine `
         -ExpectedSignature $zoxideSig `
         -DependencyPaths @($zoxidePath, $localEnvPath, $localPs1Path, $PSCommandPath) `
         -MinBytes 256
 
     if ($needsRefresh) {
-        if (Get-Command Resolve-DotfilesCommandPath -ErrorAction SilentlyContinue) {
+        if ($null -ne ${function:Resolve-DotfilesCommandPath}) {
             $resolvedZoxide = Resolve-DotfilesCommandPath -Name "zoxide"
             if ($resolvedZoxide) {
                 $zoxidePath = $resolvedZoxide
@@ -204,6 +219,9 @@ function Initialize-DotfilesZoxide {
         Write-DotfilesToolCacheFile -CachePath $cachePath -Content $content
     }
 
+    $global:__dotfiles_zoxide_bin = $zoxidePath
+    $global:__dotfiles_zoxide_cache = $cachePath
+
     # Reset zoxide hook guard before sourcing so re-sourcing $PROFILE re-attaches
     # the zoxide prompt hook after starship redefines global:prompt.
     Remove-Variable -Scope Global -Name __zoxide_hooked -ErrorAction SilentlyContinue
@@ -211,8 +229,11 @@ function Initialize-DotfilesZoxide {
 }
 
 function Initialize-DotfilesStarship {
-    $cachePath = Join-Path (Get-DotfilesToolCacheDir -Name "starship") "init.cached.ps1"
-    $starshipPath = Resolve-DotfilesCachedToolPath -Name "starship" -CachePath $cachePath
+    $global:__dotfiles_starship_bin = $null
+    $global:__dotfiles_starship_cache = $null
+    $cachePath = [System.IO.Path]::Combine((Get-DotfilesToolCacheDir -Name "starship"), "init.cached.ps1")
+    $headerLine = Get-DotfilesCacheHeaderLine -CachePath $cachePath
+    $starshipPath = Resolve-DotfilesCachedToolPath -Name "starship" -HeaderLine $headerLine
     if (-not $starshipPath) {
         return
     }
@@ -220,22 +241,23 @@ function Initialize-DotfilesStarship {
     $configPath = if ($env:STARSHIP_CONFIG) {
         $env:STARSHIP_CONFIG
     } elseif ($HOME) {
-        Join-Path $HOME ".config\starship.toml"
+        [System.IO.Path]::Combine($HOME, ".config\starship.toml")
     } else {
         $null
     }
 
-    $localEnvPath = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.env" } else { $null }
-    $localPs1Path = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.ps1" } else { $null }
+    $localEnvPath = if ($HOME) { [System.IO.Path]::Combine($HOME, ".config\dotfiles\local.env") } else { $null }
+    $localPs1Path = if ($HOME) { [System.IO.Path]::Combine($HOME, ".config\dotfiles\local.ps1") } else { $null }
     $starshipSig = Get-DotfilesBinarySignature -BinaryPath $starshipPath
     $needsRefresh = Test-DotfilesToolCacheStale `
         -CachePath $cachePath `
+        -HeaderLine $headerLine `
         -ExpectedSignature $starshipSig `
         -DependencyPaths @($starshipPath, $configPath, $localEnvPath, $localPs1Path, $PSCommandPath) `
         -MinBytes 512
 
     if ($needsRefresh) {
-        if (Get-Command Resolve-DotfilesCommandPath -ErrorAction SilentlyContinue) {
+        if ($null -ne ${function:Resolve-DotfilesCommandPath}) {
             $resolvedStarship = Resolve-DotfilesCommandPath -Name "starship"
             if ($resolvedStarship) {
                 $starshipPath = $resolvedStarship
@@ -276,12 +298,12 @@ function Initialize-DotfilesStarship {
 
         # Defer PSReadLine option hooks until the first prompt render so profile
         # startup does not pay the cost of scanning PSModulePath to autoload PSReadLine.
-        $initScript = $initScript.Replace(
-            "`$script:DoesUseLists = (Get-PSReadLineOption).PredictionViewStyle -eq 'ListView'",
-            '$script:DoesUseLists = $false'
-        )
         $psReadLinePattern = '(?s)(# Invoke Starship and set continuation prompt.*?)(\r?\n\s*Export-ModuleMember)'
         if ($initScript -match $psReadLinePattern) {
+            $initScript = $initScript.Replace(
+                "`$script:DoesUseLists = (Get-PSReadLineOption).PredictionViewStyle -eq 'ListView'",
+                '$script:DoesUseLists = $false'
+            )
             $initScript = [regex]::Replace(
                 $initScript,
                 $psReadLinePattern,
@@ -301,6 +323,9 @@ function Initialize-DotfilesStarship {
             ).Replace(
                 'function Enable-TransientPrompt {',
                 "function Enable-TransientPrompt {`n        if (-not `$script:PSReadLineInitialized) { Initialize-StarshipPSReadLine }"
+            ).Replace(
+                'if ([Microsoft.PowerShell.PSConsoleReadLine]::InViCommandMode()) {',
+                'if ($script:PSReadLineInitialized -and [Microsoft.PowerShell.PSConsoleReadLine]::InViCommandMode()) {'
             )
         }
 
@@ -308,6 +333,8 @@ function Initialize-DotfilesStarship {
         Write-DotfilesToolCacheFile -CachePath $cachePath -Content $content
     }
 
+    $global:__dotfiles_starship_bin = $starshipPath
+    $global:__dotfiles_starship_cache = $cachePath
     . $cachePath
 }
 

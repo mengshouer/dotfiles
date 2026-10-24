@@ -1,94 +1,109 @@
 # Optional fnm initialization (fast default PATH + on-demand multishell).
 
-$dotfilesFnmCacheDir = [System.Environment]::GetFolderPath('LocalApplicationData')
-if (-not $dotfilesFnmCacheDir) {
-    $dotfilesFnmCacheDir = if ($env:XDG_CACHE_HOME) {
-        $env:XDG_CACHE_HOME
-    } elseif ($HOME) {
-        Join-Path $HOME ".cache"
+function script:Register-DotfilesFnm {
+    $dotfilesFnmPath = $null
+    $dotfilesFnmDefaultAlias = $null
+    $dotfilesFnmDirResolved = $null
+
+    if ($global:__dotfiles_fnm_precached -and $global:__dotfiles_fnm_bin) {
+        $global:__dotfiles_fnm_precached = $false
+        $dotfilesFnmPath = $global:__dotfiles_fnm_bin
+        $dotfilesFnmDefaultAlias = $global:__dotfiles_fnm_default_alias
+        $dotfilesFnmDirResolved = $global:__dotfiles_fnm_dir_resolved
     } else {
-        [System.IO.Path]::GetTempPath()
-    }
-}
-$dotfilesFnmCacheFile = Join-Path (Join-Path $dotfilesFnmCacheDir "fnm") "path.cached.txt"
+        $global:__dotfiles_fnm_bin = $null
+        $global:__dotfiles_fnm_default_alias = $null
+        $global:__dotfiles_fnm_dir_resolved = $null
 
-$dotfilesFnmPath = $null
-$dotfilesFnmDefaultAlias = $null
-$dotfilesFnmDirResolved = $null
-
-$dotfilesFnmCacheInfo = [System.IO.FileInfo]::new($dotfilesFnmCacheFile)
-if ($dotfilesFnmCacheInfo.Exists) {
-    $dotfilesFnmCacheValid = $true
-    $dotfilesFnmCacheTicks = $dotfilesFnmCacheInfo.LastWriteTimeUtc.Ticks
-    $dotfilesFnmLocalEnv = if ($HOME) { Join-Path $HOME ".config\dotfiles\local.env" } else { $null }
-
-    foreach ($dep in @($dotfilesFnmLocalEnv, $PSCommandPath)) {
-        if (-not $dep) {
-            continue
+        $dotfilesFnmCacheDir = if ($env:LOCALAPPDATA) {
+            $env:LOCALAPPDATA
+        } else {
+            $dir = [System.Environment]::GetFolderPath('LocalApplicationData')
+            if ($dir) { $dir }
+            elseif ($env:XDG_CACHE_HOME) { $env:XDG_CACHE_HOME }
+            elseif ($HOME) { [System.IO.Path]::Combine($HOME, ".cache") }
+            else { [System.IO.Path]::GetTempPath() }
         }
-        $depInfo = [System.IO.FileInfo]::new($dep)
-        if ($depInfo.Exists -and ([Math]::Max($depInfo.LastWriteTimeUtc.Ticks, $depInfo.CreationTimeUtc.Ticks) -gt $dotfilesFnmCacheTicks)) {
-            $dotfilesFnmCacheValid = $false
-            break
-        }
-    }
+        $dotfilesFnmCacheFile = [System.IO.Path]::Combine($dotfilesFnmCacheDir, "fnm\path.cached.txt")
 
-    if ($dotfilesFnmCacheValid) {
-        try {
-            $cachedLines = [System.IO.File]::ReadAllLines($dotfilesFnmCacheFile)
-            if ($cachedLines.Length -ge 1 -and $cachedLines[0] -and [System.IO.File]::Exists($cachedLines[0])) {
-                $dotfilesFnmPath = $cachedLines[0]
-                if ($cachedLines.Length -ge 2 -and $cachedLines[1] -and [System.IO.Directory]::Exists($cachedLines[1])) {
-                    $dotfilesFnmDefaultAlias = $cachedLines[1]
+        $dotfilesFnmCacheInfo = [System.IO.FileInfo]::new($dotfilesFnmCacheFile)
+        if ($dotfilesFnmCacheInfo.Exists) {
+            $dotfilesFnmCacheValid = $true
+            $dotfilesFnmCacheTicks = $dotfilesFnmCacheInfo.LastWriteTimeUtc.Ticks
+            $dotfilesFnmLocalEnv = if ($HOME) { [System.IO.Path]::Combine($HOME, ".config\dotfiles\local.env") } else { $null }
+
+            foreach ($dep in @($dotfilesFnmLocalEnv, $PSCommandPath)) {
+                if (-not $dep) {
+                    continue
                 }
-                if ($cachedLines.Length -ge 3 -and $cachedLines[2] -and [System.IO.Directory]::Exists($cachedLines[2])) {
-                    $dotfilesFnmDirResolved = $cachedLines[2]
+                $depInfo = [System.IO.FileInfo]::new($dep)
+                if ($depInfo.Exists -and ([Math]::Max($depInfo.LastWriteTimeUtc.Ticks, $depInfo.CreationTimeUtc.Ticks) -gt $dotfilesFnmCacheTicks)) {
+                    $dotfilesFnmCacheValid = $false
+                    break
                 }
             }
-        } catch {}
-    }
-}
 
-if (-not $dotfilesFnmPath) {
-    $dotfilesFnmPath = if (Get-Command Resolve-DotfilesCommandPath -ErrorAction SilentlyContinue) {
-        Resolve-DotfilesCommandPath -Name "fnm"
-    } else {
-        $cmd = Get-Command fnm -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($cmd) { $cmd.Source } else { $null }
+            if ($dotfilesFnmCacheValid) {
+                try {
+                    $cachedLines = [System.IO.File]::ReadAllLines($dotfilesFnmCacheFile)
+                    if ($cachedLines.Length -ge 1 -and $cachedLines[0] -and [System.IO.File]::Exists($cachedLines[0])) {
+                        $dotfilesFnmPath = $cachedLines[0]
+                        if ($cachedLines.Length -ge 2 -and $cachedLines[1] -and [System.IO.Directory]::Exists($cachedLines[1])) {
+                            $dotfilesFnmDefaultAlias = $cachedLines[1]
+                        }
+                        if ($cachedLines.Length -ge 3 -and $cachedLines[2] -and [System.IO.Directory]::Exists($cachedLines[2])) {
+                            $dotfilesFnmDirResolved = $cachedLines[2]
+                        }
+                    }
+                } catch {}
+            }
+        }
     }
-}
 
-if ($dotfilesFnmPath) {
+    if (-not $dotfilesFnmPath) {
+        $dotfilesFnmPath = if ($null -ne ${function:Resolve-DotfilesCommandPath}) {
+            Resolve-DotfilesCommandPath -Name "fnm"
+        } else {
+            $cmds = @(Get-Command fnm -CommandType Application -ErrorAction SilentlyContinue)
+            if ($cmds.Count -gt 0) { $cmds[0].Source } else { $null }
+        }
+    }
+
+    if (-not $dotfilesFnmPath) {
+        return
+    }
+
     $global:__dotfiles_fnm_bin = $dotfilesFnmPath
     $global:__dotfiles_fnm_initialized = $false
     $global:__dotfiles_fnm_last_dir = $null
+    $global:__dotfiles_fnm_startup_checked = $false
 
     if (-not $dotfilesFnmDefaultAlias) {
         $dotfilesFnmCandidates = @()
         if ($env:FNM_DIR) {
             $dotfilesFnmCandidates += $env:FNM_DIR
         }
-        $dotfilesFnmBinDir = Split-Path -Parent $dotfilesFnmPath
+        $dotfilesFnmBinDir = [System.IO.Path]::GetDirectoryName($dotfilesFnmPath)
         if ($dotfilesFnmBinDir) {
             $dotfilesFnmCandidates += $dotfilesFnmBinDir
         }
         if ($env:APPDATA) {
-            $dotfilesFnmCandidates += (Join-Path $env:APPDATA "fnm")
+            $dotfilesFnmCandidates += [System.IO.Path]::Combine($env:APPDATA, "fnm")
         }
         if ($env:LOCALAPPDATA) {
-            $dotfilesFnmCandidates += (Join-Path $env:LOCALAPPDATA "fnm")
+            $dotfilesFnmCandidates += [System.IO.Path]::Combine($env:LOCALAPPDATA, "fnm")
         }
         if ($HOME) {
-            $dotfilesFnmCandidates += (Join-Path $HOME ".local\share\fnm")
-            $dotfilesFnmCandidates += (Join-Path $HOME ".fnm")
+            $dotfilesFnmCandidates += [System.IO.Path]::Combine($HOME, ".local\share\fnm")
+            $dotfilesFnmCandidates += [System.IO.Path]::Combine($HOME, ".fnm")
         }
 
         foreach ($candidate in $dotfilesFnmCandidates) {
             if (-not $candidate) {
                 continue
             }
-            $aliasDir = Join-Path $candidate "aliases\default"
-            $aliasBinDir = Join-Path $aliasDir "bin"
+            $aliasDir = [System.IO.Path]::Combine($candidate, "aliases\default")
+            $aliasBinDir = [System.IO.Path]::Combine($aliasDir, "bin")
             if ([System.IO.Directory]::Exists($aliasBinDir)) {
                 $dotfilesFnmDefaultAlias = $aliasBinDir
                 $dotfilesFnmDirResolved = $candidate
@@ -101,9 +116,9 @@ if ($dotfilesFnmPath) {
         }
 
         try {
-            $cacheParent = Split-Path -Parent $dotfilesFnmCacheFile
-            if (-not [System.IO.Directory]::Exists($cacheParent)) {
-                New-Item -ItemType Directory -Path $cacheParent -Force | Out-Null
+            $cacheParent = [System.IO.Path]::GetDirectoryName($dotfilesFnmCacheFile)
+            if ($cacheParent -and (-not [System.IO.Directory]::Exists($cacheParent))) {
+                [void][System.IO.Directory]::CreateDirectory($cacheParent)
             }
             $tempCacheFile = "$dotfilesFnmCacheFile.$PID.tmp"
             try {
@@ -112,7 +127,14 @@ if ($dotfilesFnmPath) {
                     @([string]$dotfilesFnmPath, [string]$dotfilesFnmDefaultAlias, [string]$dotfilesFnmDirResolved),
                     [System.Text.UTF8Encoding]::new($true)
                 )
-                Move-Item -LiteralPath $tempCacheFile -Destination $dotfilesFnmCacheFile -Force -ErrorAction Stop
+                if ($PSVersionTable.PSVersion.Major -ge 6) {
+                    [System.IO.File]::Move($tempCacheFile, $dotfilesFnmCacheFile, $true)
+                } else {
+                    if ([System.IO.File]::Exists($dotfilesFnmCacheFile)) {
+                        [System.IO.File]::Delete($dotfilesFnmCacheFile)
+                    }
+                    [System.IO.File]::Move($tempCacheFile, $dotfilesFnmCacheFile)
+                }
             } finally {
                 if ([System.IO.File]::Exists($tempCacheFile)) {
                     try { [System.IO.File]::Delete($tempCacheFile) } catch {}
@@ -121,25 +143,35 @@ if ($dotfilesFnmPath) {
         } catch {}
     }
 
+    $global:__dotfiles_fnm_dir_resolved = $dotfilesFnmDirResolved
     if ($dotfilesFnmDirResolved -and (-not $env:FNM_DIR)) {
         $env:FNM_DIR = $dotfilesFnmDirResolved
     }
 
     $global:__dotfiles_fnm_default_alias = $dotfilesFnmDefaultAlias
     if ($dotfilesFnmDefaultAlias) {
-        $pathSep = [System.IO.Path]::PathSeparator
-        $pathList = [System.Collections.Generic.List[string]]::new()
-        $pathList.Add($dotfilesFnmDefaultAlias)
         if ($env:PATH) {
-            foreach ($part in $env:PATH.Split($pathSep)) {
-                if ($part -and
-                    (-not [string]::Equals($part, $dotfilesFnmDefaultAlias, [System.StringComparison]::OrdinalIgnoreCase)) -and
-                    ($part.IndexOf("fnm_multishells", [System.StringComparison]::OrdinalIgnoreCase) -lt 0)) {
-                    $pathList.Add($part)
+            if ($env:PATH.IndexOf("fnm_multishells", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                if ($env:PATH.IndexOf($dotfilesFnmDefaultAlias, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                    $env:PATH = "$dotfilesFnmDefaultAlias;$env:PATH"
                 }
+            } else {
+                $env:FNM_MULTISHELL_PATH = $null
+                $pathSep = [System.IO.Path]::PathSeparator
+                $pathList = [System.Collections.Generic.List[string]]::new()
+                $pathList.Add($dotfilesFnmDefaultAlias)
+                foreach ($part in $env:PATH.Split($pathSep)) {
+                    if ($part -and
+                        (-not [string]::Equals($part, $dotfilesFnmDefaultAlias, [System.StringComparison]::OrdinalIgnoreCase)) -and
+                        ($part.IndexOf("fnm_multishells", [System.StringComparison]::OrdinalIgnoreCase) -lt 0)) {
+                        $pathList.Add($part)
+                    }
+                }
+                $env:PATH = [string]::Join($pathSep, $pathList)
             }
+        } else {
+            $env:PATH = $dotfilesFnmDefaultAlias
         }
-        $env:PATH = [string]::Join($pathSep, $pathList)
     }
 
     function global:Initialize-DotfilesFnm {
@@ -181,17 +213,17 @@ if ($dotfilesFnmPath) {
 
     function global:Test-DotfilesFnmVersionFile {
         param(
-            [string]$DirectoryPath = (Get-Location).ProviderPath
+            [string]$DirectoryPath = $ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath
         )
 
         $dir = $DirectoryPath
         while ($dir) {
-            if ([System.IO.File]::Exists((Join-Path $dir ".nvmrc")) -or
-                [System.IO.File]::Exists((Join-Path $dir ".node-version"))) {
+            if ([System.IO.File]::Exists([System.IO.Path]::Combine($dir, ".nvmrc")) -or
+                [System.IO.File]::Exists([System.IO.Path]::Combine($dir, ".node-version"))) {
                 return $true
             }
 
-            $pkgJson = Join-Path $dir "package.json"
+            $pkgJson = [System.IO.Path]::Combine($dir, "package.json")
             if ([System.IO.File]::Exists($pkgJson)) {
                 try {
                     $raw = [System.IO.File]::ReadAllText($pkgJson)
@@ -201,7 +233,7 @@ if ($dotfilesFnmPath) {
                 } catch {}
             }
 
-            $parent = Split-Path -Parent $dir
+            $parent = [System.IO.Path]::GetDirectoryName($dir)
             if ((-not $parent) -or [string]::Equals($parent, $dir, [System.StringComparison]::OrdinalIgnoreCase)) {
                 break
             }
@@ -212,7 +244,8 @@ if ($dotfilesFnmPath) {
     }
 
     function global:Set-FnmOnLoad {
-        $currentDir = (Get-Location).ProviderPath
+        $global:__dotfiles_fnm_startup_checked = $true
+        $currentDir = $ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath
         if (-not $currentDir) {
             return
         }
@@ -246,37 +279,48 @@ if ($dotfilesFnmPath) {
         Set-FnmOnLoad
     }
 
-    Set-Alias -Scope Global -Name cd_with_fnm -Value Set-LocationWithFnm
-    Set-Alias -Option AllScope -Scope Global -Name cd -Value Set-LocationWithFnm
+    function global:cd_with_fnm { Set-LocationWithFnm @args }
 
-    # Hook LocationChangedAction on PowerShell 7+ so zoxide (z/j), .., ..., and
-    # Push-Location/Pop-Location also trigger Set-FnmOnLoad automatically.
-    $locationChangedProp = $ExecutionContext.SessionState.InvokeCommand.PSObject.Properties["LocationChangedAction"]
-    $locationAlreadyHooked = [bool](Get-Variable -Scope Global -Name __dotfiles_fnm_location_hooked -ValueOnly -ErrorAction SilentlyContinue)
-    if (($null -ne $locationChangedProp) -and (-not $locationAlreadyHooked)) {
-        $global:__dotfiles_fnm_location_hooked = $true
-        $existingAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
-        if ($null -ne $existingAction) {
-            $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
-                param($sender, $eventArgs)
-                & $existingAction $sender $eventArgs
-                Set-FnmOnLoad
-            }.GetNewClosure()
-        } else {
-            $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
-                param($sender, $eventArgs)
+    # Hook LocationChangedAction on PowerShell 7+ so cd, zoxide (z/j), .., ...,
+    # and Push-Location/Pop-Location all trigger Set-FnmOnLoad without calling
+    # Set-Alias at startup (which would autoload Microsoft.PowerShell.Utility).
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        if (-not $global:__dotfiles_fnm_location_hooked) {
+            $global:__dotfiles_fnm_location_hooked = $true
+            $existingAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
+            if ($null -ne $existingAction) {
+                $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
+                    param($sender, $eventArgs)
+                    & $existingAction $sender $eventArgs
+                    Set-FnmOnLoad
+                }.GetNewClosure()
+            } else {
+                $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
+                    param($sender, $eventArgs)
+                    Set-FnmOnLoad
+                }
+            }
+        }
+    } else {
+        Set-Alias -Option AllScope -Scope Global -Name cd -Value Set-LocationWithFnm
+    }
+
+    # Defer initial directory version check until the first prompt render
+    # (before Starship renders the prompt) so $PROFILE startup is never blocked.
+    function global:Invoke-Starship-PreCommand {
+        if (-not $global:__dotfiles_fnm_startup_checked) {
+            $global:__dotfiles_fnm_startup_checked = $true
+            if (-not $global:__dotfiles_fnm_default_alias) {
+                Initialize-DotfilesFnm
+            } else {
                 Set-FnmOnLoad
             }
         }
     }
 
-    if (-not $dotfilesFnmDefaultAlias) {
-        Initialize-DotfilesFnm
-    } else {
-        Set-FnmOnLoad
+    if (-not $env:STARSHIP_SHELL) {
+        Invoke-Starship-PreCommand
     }
-
-    Remove-Variable dotfilesFnmCandidates, dotfilesFnmBinDir, candidate, aliasDir, aliasBinDir, cacheParent, tempCacheFile, pathSep, pathList, part, locationChangedProp, locationAlreadyHooked, existingAction -ErrorAction SilentlyContinue
 }
 
-Remove-Variable dotfilesFnmCacheDir, dotfilesFnmCacheFile, dotfilesFnmCacheInfo, dotfilesFnmCacheValid, dotfilesFnmCacheTicks, dotfilesFnmLocalEnv, dep, depInfo, dotfilesFnmPath, dotfilesFnmDefaultAlias, dotfilesFnmDirResolved, cachedLines -ErrorAction SilentlyContinue
+Register-DotfilesFnm

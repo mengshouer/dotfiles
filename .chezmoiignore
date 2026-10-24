@@ -23,6 +23,9 @@ scripts/**
 Library/Caches/mise
 Library/Caches/mise/**
 
+Documents
+Documents/**
+
 {{ if eq .chezmoi.os "windows" }}
 .zshrc
 .zimrc
@@ -36,10 +39,9 @@ Library/Caches/mise/**
 .chezmoiscripts/apply_reconcile-zshenv-block.sh
 .chezmoiscripts/apply_upsert-zshrc-block.sh
 {{ else }}
-Documents
-Documents/**
 .config/dotfiles/pwsh
 .config/dotfiles/pwsh/**
 .chezmoiscripts/apply_protect-overwrite.ps1
 .chezmoiscripts/apply_ensure-gitconfig-include.ps1
+.chezmoiscripts/apply_upsert-pwsh-profile-block.ps1
 {{ end }}

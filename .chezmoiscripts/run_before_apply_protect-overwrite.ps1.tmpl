@@ -13,8 +13,6 @@ if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
 }
 
 $guarded = @(
-    (Join-Path $HOME "Documents\PowerShell\Microsoft.PowerShell_profile.ps1"),
-    (Join-Path $HOME "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"),
     (Join-Path $HOME ".config\starship.toml")
 )
 
@@ -88,8 +86,7 @@ $($report -join [Environment]::NewLine)
     s  skip backups and continue
     n  abort without applying
 
-  Common cause: installers or editors appended to PowerShell profiles.
-  To keep that content across applies, move it to:
+  To keep local extras across applies, move them to:
     ~/.config/dotfiles/local.ps1   (auto-sourced by PowerShell profiles)
     ~/.config/dotfiles/local.env   (KEY=VALUE env vars)
     ~/.gitconfig                   (mutable Git config via git config --global)

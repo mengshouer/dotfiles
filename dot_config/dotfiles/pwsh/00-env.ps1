@@ -102,15 +102,30 @@ function Resolve-DotfilesCommandPath {
     }
 
     if (-not $commandPath) {
-        $command = Get-Command -Name $Name -CommandType Application -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if (-not $command) {
-            return $null
+        $commands = @(Get-Command -Name $Name -CommandType Application -ErrorAction SilentlyContinue)
+        if ($commands.Count -gt 0) {
+            $command = $commands[0]
+            $commandPath = if ($command.Source) { $command.Source } else { $command.Path }
         }
-        $commandPath = if ($command.Source) { $command.Source } else { $command.Path }
-        if (-not $commandPath) {
-            return $null
+    }
+
+    if ((-not $commandPath) -and $isWindowsHost -and $env:PATH) {
+        foreach ($dir in $env:PATH.Split([System.IO.Path]::PathSeparator)) {
+            $trimmedDir = $dir.Trim().Trim('"').TrimEnd('\', '/')
+            if ($trimmedDir.EndsWith("\shims", [System.StringComparison]::OrdinalIgnoreCase)) {
+                $scoopRoot = [System.IO.Path]::GetDirectoryName($trimmedDir)
+                if ($scoopRoot) {
+                    $appExe = [System.IO.Path]::Combine($scoopRoot, "apps\$Name\current\$Name.exe")
+                    if ([System.IO.File]::Exists($appExe)) {
+                        return $appExe
+                    }
+                }
+            }
         }
+    }
+
+    if (-not $commandPath) {
+        return $null
     }
 
     if ($commandPath.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -136,4 +151,4 @@ function Resolve-DotfilesCommandPath {
     return $commandPath
 }
 
-Import-DotfilesEnvFile -Path (Join-Path $HOME ".config\dotfiles\local.env")
+Import-DotfilesEnvFile -Path ([System.IO.Path]::Combine($HOME, ".config\dotfiles\local.env"))
