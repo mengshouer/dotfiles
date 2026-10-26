@@ -118,7 +118,7 @@ ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 
 ZIM_HOME="${ZDOTDIR:-$dotfiles_home}/.zim"
 ZSH_CACHE_DIR="$dotfiles_cache_home/zsh"
-[[ -d "$ZSH_CACHE_DIR" ]] || command mkdir -p "$ZSH_CACHE_DIR"
+[[ -d "$ZSH_CACHE_DIR" ]] || command mkdir -p -m 0700 "$ZSH_CACHE_DIR"
 zstyle ':zim:completion' dumpfile "$ZSH_CACHE_DIR/.zcompdump"
 dotfiles_stale_dumps=("$ZSH_CACHE_DIR"/.zcompdump.*.*(Nmm+5))
 (( ${#dotfiles_stale_dumps} )) && command rm -f -- "${dotfiles_stale_dumps[@]}" 2>/dev/null

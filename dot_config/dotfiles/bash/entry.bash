@@ -339,25 +339,20 @@ bash_source_cached_tool_init() {
   local tool_name="$1"
   shift
 
-  local bin_path
-  bin_path="$(type -P "$tool_name" 2>/dev/null)" || return 0
+  hash "$tool_name" 2>/dev/null || return 0
+  local bin_path="${BASH_CMDS[$tool_name]:-}"
   [[ -n "$bin_path" ]] || return 0
 
   local home_dir="$HOME"
   (( EUID == 0 )) && home_dir=~root
 
-  local real_bin_path="$bin_path"
-  if command -v readlink >/dev/null 2>&1; then
-    real_bin_path="$(command readlink -f "$bin_path" 2>/dev/null || printf '%s\n' "$bin_path")"
-  fi
-
   local stat_sig=""
   if [[ "$OSTYPE" == darwin* ]]; then
-    stat_sig="$(command stat -f '%m:%z' "$real_bin_path" 2>/dev/null || true)"
+    stat_sig="$(command stat -L -f '%m:%z' "$bin_path" 2>/dev/null || true)"
   else
-    stat_sig="$(command stat -c '%Y:%s' "$real_bin_path" 2>/dev/null || true)"
+    stat_sig="$(command stat -L -c '%Y:%s' "$bin_path" 2>/dev/null || true)"
   fi
-  local bin_sig="${real_bin_path}${stat_sig:+|$stat_sig}"
+  local bin_sig="${bin_path}${stat_sig:+|$stat_sig}"
 
   local config_dir="${XDG_CONFIG_HOME:-$home_dir/.config}/dotfiles"
   local cache_dir="${XDG_CACHE_HOME:-$home_dir/.cache}/bash"
@@ -365,7 +360,7 @@ bash_source_cached_tool_init() {
   local local_env_file="$config_dir/local.env"
   local local_bash_file="$config_dir/local.bash"
   local entry_script_file="$config_dir/bash/entry.bash"
-  local expected_header="# DOTFILES_SOURCE_BINARY: $bin_sig"
+  local expected_header="# DOTFILES_SOURCE_BINARY: $bin_sig|$*"
   local needs_refresh=0
 
   if [[ ! -s "$cache_file" ]]; then
@@ -374,7 +369,7 @@ bash_source_cached_tool_init() {
     local first_line=""
     IFS= read -r first_line < "$cache_file" 2>/dev/null || first_line=""
     [[ "$first_line" == "$expected_header" ]] || needs_refresh=1
-    [[ "$bin_path" -nt "$cache_file" || "$real_bin_path" -nt "$cache_file" ]] && needs_refresh=1
+    [[ "$bin_path" -nt "$cache_file" ]] && needs_refresh=1
     [[ -f "$local_env_file" && "$local_env_file" -nt "$cache_file" ]] && needs_refresh=1
     [[ -f "$local_bash_file" && "$local_bash_file" -nt "$cache_file" ]] && needs_refresh=1
     [[ -f "$entry_script_file" && "$entry_script_file" -nt "$cache_file" ]] && needs_refresh=1
@@ -385,7 +380,7 @@ bash_source_cached_tool_init() {
     init_script="$("$bin_path" "$@" 2>/dev/null)" || return 0
     [[ -n "$init_script" ]] || return 0
 
-    [[ -d "$cache_dir" ]] || command mkdir -p "$cache_dir" 2>/dev/null || true
+    [[ -d "$cache_dir" ]] || command mkdir -p -m 0700 "$cache_dir" 2>/dev/null || true
     local tmp_file="$cache_file.$$.tmp"
     if {
       printf '%s\n' "$expected_header"

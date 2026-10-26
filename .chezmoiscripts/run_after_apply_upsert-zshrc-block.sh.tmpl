@@ -4,6 +4,7 @@ set -euo pipefail
 target="$HOME/.zshrc"
 managed_start='# >>> chezmoi dotfiles zsh start >>>'
 managed_end='# <<< chezmoi dotfiles zsh end <<<'
+# shellcheck disable=SC2016
 managed_body='source "$HOME/.config/dotfiles/zsh/entry.zsh"'
 
 if ! command -v zsh >/dev/null 2>&1 &&

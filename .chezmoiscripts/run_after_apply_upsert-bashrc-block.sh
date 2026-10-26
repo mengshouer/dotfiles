@@ -4,6 +4,7 @@ set -euo pipefail
 target="$HOME/.bashrc"
 managed_start='# >>> chezmoi dotfiles bash start >>>'
 managed_end='# <<< chezmoi dotfiles bash end <<<'
+# shellcheck disable=SC2016
 managed_body='[[ -f "$HOME/.config/dotfiles/bash/entry.bash" ]] && source "$HOME/.config/dotfiles/bash/entry.bash"'
 
 if [[ "${DOTFILES_ENABLE_BASH:-0}" != "1" ]] &&
