@@ -70,41 +70,41 @@ deleted = "x"
 # =========================================================
 
 [nodejs]
+symbol = "[⬢](bold green) "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[node $version\])]($style)'
+format = '[\[$symbol$version\]]($style)'
 detect_files = ["package.json", ".node-version", ".nvmrc"]
 detect_folders = []
 detect_extensions = []
 
 [python]
+symbol = "🐍 "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[py $version( $virtualenv)\])]($style)'
+format = '[\[$symbol$version( $virtualenv)\]]($style)'
 detect_folders = []
 
 [golang]
+symbol = "🐹 "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[go $version\])]($style)'
+format = '[\[$symbol$version\]]($style)'
 detect_folders = []
 
 [rust]
+symbol = "🦀 "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[rs $version\])]($style)'
+format = '[\[$symbol$version\]]($style)'
 detect_folders = []
 
 [java]
+symbol = "☕ "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[java $version\])]($style)'
+format = '[\[$symbol$version\]]($style)'
 detect_folders = []
 
 [bun]
+symbol = "🥟 "
 style = "fg:info"
-version_format = "${raw}"
-format = '[(\[bun $version\])]($style)'
+format = '[\[$symbol$version\]]($style)'
 detect_folders = []
 
 # =========================================================
@@ -119,7 +119,7 @@ symbol_threshold = 1
 format = '[\[$symbol$number\]]($style)'
 
 [cmd_duration]
-min_time = 2_000
+min_time = 5_000
 style = "fg:info"
 format = '[\[$duration\]]($style)'
 
