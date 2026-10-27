@@ -26,7 +26,7 @@ activate_venv() {
 }
 
 deactivate_venv() {
-  if (( $+functions[deactivate] )); then
+  if typeset -f deactivate >/dev/null 2>&1; then
     deactivate
     return
   fi

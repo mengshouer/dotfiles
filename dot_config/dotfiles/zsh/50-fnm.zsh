@@ -41,7 +41,11 @@ zsh_init_fnm() {
   fi
 
   if [[ -z "${XDG_RUNTIME_DIR:-}" || ! -d "$XDG_RUNTIME_DIR" || ! -w "$XDG_RUNTIME_DIR" ]]; then
-    export XDG_RUNTIME_DIR="/tmp"
+    local fnm_home="$HOME"
+    (( EUID == 0 )) && fnm_home=~root
+    local fallback_runtime_dir="${XDG_CACHE_HOME:-$fnm_home/.cache}/fnm-runtime"
+    command mkdir -p -m 0700 "$fallback_runtime_dir" 2>/dev/null || return 0
+    export XDG_RUNTIME_DIR="$fallback_runtime_dir"
   fi
 
   zsh_optional_eval command fnm env --use-on-cd --shell zsh
@@ -66,6 +70,7 @@ _dotfiles_fnm_lazy_chpwd() {
     else
       FNM_VERSION_FILE_STRATEGY=recursive command fnm use --silent-if-unchanged
     fi
+    zle && zle reset-prompt 2>/dev/null || true
   fi
 }
 
@@ -117,7 +122,7 @@ zsh_setup_fnm() {
 
     add-zsh-hook -D chpwd _dotfiles_fnm_lazy_chpwd
     add-zsh-hook chpwd _dotfiles_fnm_lazy_chpwd
-    zsh_defer_or_run _dotfiles_fnm_lazy_chpwd
+    zsh_defer_or_run -dmpr _dotfiles_fnm_lazy_chpwd
   else
     zsh_defer_or_run zsh_init_fnm
   fi

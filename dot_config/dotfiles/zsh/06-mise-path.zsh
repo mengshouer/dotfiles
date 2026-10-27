@@ -3,15 +3,17 @@
 # installs/shims live under ~/.local/share/mise, inside the current user's HOME.
 
 zsh_mise_check() {
-  [[ -x "$HOME/.local/bin/mise" ]] || return 1
+  local mise_home="$HOME"
+  (( EUID == 0 )) && mise_home=~root
+  [[ -x "$mise_home/.local/bin/mise" ]] || return 1
 
-  export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
-  export MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-$HOME/.config/mise}"
-  export MISE_STATE_DIR="${MISE_STATE_DIR:-$HOME/.local/state/mise}"
+  export MISE_DATA_DIR="${MISE_DATA_DIR:-$mise_home/.local/share/mise}"
+  export MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-$mise_home/.config/mise}"
+  export MISE_STATE_DIR="${MISE_STATE_DIR:-$mise_home/.local/state/mise}"
   if [[ "$OSTYPE" == darwin* ]]; then
-    export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$HOME/Library/Caches/mise}"
+    export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$mise_home/Library/Caches/mise}"
   else
-    export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$HOME/.cache/mise}"
+    export MISE_CACHE_DIR="${MISE_CACHE_DIR:-$mise_home/.cache/mise}"
   fi
 }
 
@@ -20,9 +22,9 @@ zsh_mise_prepare() {
 
   zsh_path_prepend "$MISE_DATA_DIR/shims"
 
-  local completions_dir="$MISE_DATA_DIR/completions/zsh"
-  if [[ -d "$completions_dir" ]]; then
-    fpath=("$completions_dir" "${(@)fpath:#$completions_dir}")
+  local completions_dir="$MISE_DATA_DIR/completions/${dotfiles_shell:-zsh}"
+  if [[ -s "$completions_dir/_mise" ]]; then
+    zsh_fpath_prepend "$completions_dir"
   fi
 }
 

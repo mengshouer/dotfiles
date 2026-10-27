@@ -1,6 +1,6 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-format = "$username$directory$git_branch$git_state$git_status$nodejs$python$rust$bun$character"
+format = "$username$directory$git_branch$git_state$git_status$nodejs$python$golang$rust$java$bun$jobs$cmd_duration$character"
 
 add_newline = false
 
@@ -12,7 +12,7 @@ palette = "main"
 [palettes.main]
 info = "67"     # directory, languages, normal prompt
 ok = "107"      # git normal states
-alert = "167"   # errors, in-progress git operations
+alert = "167"   # errors, root, read-only, in-progress git operations
 
 # =========================================================
 # IDENTITY
@@ -30,7 +30,9 @@ show_always = false
 
 [directory]
 style = "fg:info"
-format = '[\[$path\]]($style)'
+format = '[\[$path\]]($style)[(\[$read_only\])]($read_only_style)'
+read_only = "RO"
+read_only_style = "fg:alert"
 
 truncation_length = 3
 truncation_symbol = "../"
@@ -60,7 +62,7 @@ untracked = "?"
 stashed = '\$'
 modified = "!"
 staged = "+"
-renamed = "»"
+renamed = "r"
 deleted = "x"
 
 # =========================================================
@@ -79,16 +81,47 @@ detect_extensions = []
 symbol = "🐍 "
 style = "fg:info"
 format = '[\[$symbol$version( $virtualenv)\]]($style)'
+detect_folders = []
+
+[golang]
+symbol = "🐹 "
+style = "fg:info"
+format = '[\[$symbol$version\]]($style)'
+detect_folders = []
 
 [rust]
 symbol = "🦀 "
 style = "fg:info"
 format = '[\[$symbol$version\]]($style)'
+detect_folders = []
+
+[java]
+symbol = "☕ "
+style = "fg:info"
+format = '[\[$symbol$version\]]($style)'
+detect_folders = []
 
 [bun]
 symbol = "🥟 "
 style = "fg:info"
 format = '[\[$symbol$version\]]($style)'
+detect_folders = []
+
+# =========================================================
+# JOBS & DURATION
+# =========================================================
+
+[jobs]
+symbol = "&"
+style = "fg:alert"
+number_threshold = 1
+symbol_threshold = 1
+format = '[\[$symbol$number\]]($style)'
+
+[cmd_duration]
+min_time = 5_000
+style = "fg:info"
+format = '[\[$duration\]]($style)'
 
 # =========================================================
 # CHARACTER
@@ -98,4 +131,3 @@ format = '[\[$symbol$version\]]($style)'
 success_symbol = '[>](fg:info)'
 error_symbol = '[>](fg:alert)'
 vimcmd_symbol = '[<](fg:ok)'
-

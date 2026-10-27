@@ -4,15 +4,16 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/bootstrap [terminal|dev|mise] [--set-shell] [--update]
+  scripts/bootstrap [terminal|dev|mise] [--bash] [--set-shell] [--update]
 
 Layers:
-  terminal   git curl ca-certificates chezmoi zsh starship zoxide fzf zimfw
+  terminal   git curl ca-certificates chezmoi zsh starship zoxide fzf zimfw (or bash-completion with --bash)
   dev        fnm uv
   mise       mise under HOME (independent, opt-in)
 
 Flags:
-  --set-shell   opt in to setting zsh as the default shell (chsh, or usermod when chsh is unavailable)
+  --bash        use bash instead of zsh for the terminal layer and enable ~/.bashrc integration
+  --set-shell   opt in to setting the selected shell (zsh by default, or bash with --bash) as the default shell
   --update      git pull --ff-only, apply dotfiles, update zimfw
 
 Run as root to install shared terminal/dev tools into /usr/local/bin for all users.
@@ -322,6 +323,21 @@ install_uv() {
   say ""
 }
 
+install_bash_completion() {
+  if [[ -r /usr/share/bash-completion/bash_completion ]]; then
+    return 0
+  fi
+
+  if have_usable_brew; then
+    brew_install_formula bash-completion@2
+    return 0
+  fi
+
+  if distro_package_available bash-completion; then
+    distro_install bash-completion
+  fi
+}
+
 case "$layer" in
   terminal)
     install_brew_or_distro_package curl
@@ -330,7 +346,11 @@ case "$layer" in
       distro_install ca-certificates
     fi
     install_chezmoi
-    install_brew_or_distro_package zsh
+    if (( use_bash )); then
+      install_bash_completion
+    else
+      install_brew_or_distro_package zsh
+    fi
     install_starship
     install_zoxide
     install_fzf
@@ -348,7 +368,11 @@ esac
 apply_after_update
 
 if [[ "$layer" == "terminal" ]]; then
-  install_zimfw
+  if (( use_bash )); then
+    enable_bash_rc_block "$repo_root"
+  else
+    install_zimfw
+  fi
 fi
 
 set_shell_if_requested

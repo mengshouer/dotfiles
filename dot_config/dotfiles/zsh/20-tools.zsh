@@ -25,7 +25,7 @@ zsh_source_cached_tool_init() {
   local local_env_file="$config_dir/local.env"
   local local_zsh_file="$config_dir/local.zsh"
   local tools_script_file="$config_dir/zsh/20-tools.zsh"
-  local expected_header="# DOTFILES_SOURCE_BINARY: $bin_sig"
+  local expected_header="# DOTFILES_SOURCE_BINARY: $bin_sig|$*"
   local needs_refresh=0
 
   if [[ ! -s "$cache_file" ]]; then
@@ -45,7 +45,7 @@ zsh_source_cached_tool_init() {
     init_script="$("$bin_path" "$@" 2>/dev/null)" || return 0
     [[ -n "$init_script" ]] || return 0
 
-    [[ -d "$cache_dir" ]] || command mkdir -p "$cache_dir" 2>/dev/null || true
+    [[ -d "$cache_dir" ]] || command mkdir -p -m 0700 "$cache_dir" 2>/dev/null || true
     local tmp_file="$cache_file.$$.tmp"
     if {
       print -r -- "$expected_header"
@@ -66,5 +66,5 @@ if (( ! $+functions[prompt_starship_precmd] )); then
   zsh_optional_eval starship init zsh
 fi
 
-zsh_defer_or_run zsh_source_cached_tool_init zoxide init zsh
-zsh_defer_or_run zsh_source_cached_tool_init fzf --zsh
+zsh_defer_or_run -dmpr zsh_source_cached_tool_init zoxide init zsh
+zsh_defer_or_run -dmpr zsh_source_cached_tool_init fzf --zsh

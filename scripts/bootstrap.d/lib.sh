@@ -3,6 +3,7 @@
 
 bootstrap_parse_args() {
   layer="terminal"
+  use_bash=0
   set_shell=0
   update=0
 
@@ -17,6 +18,7 @@ bootstrap_parse_args() {
 
   while (($#)); do
     case "$1" in
+      --bash) use_bash=1 ;;
       --set-shell) set_shell=1 ;;
       --update) update=1 ;;
       -h|--help) usage; exit 0 ;;
@@ -51,11 +53,15 @@ bootstrap_prepare_root_environment() {
   # Shared installs must stay world-readable regardless of root's umask.
   umask 022
 
-  # Drop env vars leaked from a normal user's session; keep root's own values.
+  # Drop env vars leaked from a normal user's session or pointing to unsafe
+  # locations; keep root's own values.
   local var
-  for var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME ZDOTDIR ZIM_CONFIG_FILE MISE_HOME MISE_CONFIG_DIR MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_TMP_DIR MISE_DOWNLOADS_DIR MISE_SHIMS_DIR MISE_RUSTUP_HOME MISE_CARGO_HOME; do
+  for var in DOTFILES_BOOTSTRAP_BIN_DIR XDG_BIN_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_RUNTIME_DIR ZDOTDIR ZIM_CONFIG_FILE MISE_HOME MISE_CONFIG_DIR MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_TMP_DIR MISE_DOWNLOADS_DIR MISE_SHIMS_DIR MISE_RUSTUP_HOME MISE_CARGO_HOME; do
     case "${!var:-}" in
-      /home/*|/Users/*) unset "$var" ;;
+      "") ;;
+      [!/]*|/home|/home/*|/Users|/Users/*|/tmp|/tmp/*|/var/tmp|/var/tmp/*|/run/user/[!0]*)
+        unset "$var"
+        ;;
     esac
   done
 }
@@ -119,7 +125,9 @@ bootstrap_remove_root_unsafe_paths() {
   path_remove_patterns \
     "" \
     "[!/]*" \
+    "/home" \
     "/home/*" \
+    "/Users" \
     "/Users/*" \
     "/tmp" \
     "/tmp/*" \
@@ -176,6 +184,13 @@ bootstrap_prepare_path() {
   if [[ "${OSTYPE:-}" != darwin* ]]; then
     path_prepend "${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
   fi
+
+  # Auto-preserve bash mode on bash-only machines during `bootstrap --update`.
+  if (( ! use_bash )) && ! have zsh &&
+     [[ -f "$HOME/.bashrc" ]] &&
+     grep -Fq '# >>> chezmoi dotfiles bash start >>>' "$HOME/.bashrc"; then
+    use_bash=1
+  fi
 }
 
 update_source_repo() {
@@ -223,13 +238,25 @@ install_zimfw() {
   fi
 }
 
+enable_bash_rc_block() {
+  local repo_dir="$1"
+  local script_file="$repo_dir/.chezmoiscripts/run_after_apply_upsert-bashrc-block.sh"
+
+  [[ -f "$script_file" ]] || return 1
+  run env DOTFILES_ENABLE_BASH=1 bash "$script_file"
+}
+
 apply_after_update() {
   (( update )) || return 0
   have chezmoi || {
     say "chezmoi is required for --update."
     return 1
   }
-  run chezmoi apply
+  if (( use_bash )); then
+    run env DOTFILES_ENABLE_BASH=1 chezmoi apply
+  else
+    run chezmoi apply
+  fi
 }
 
 print_manual_chezmoi_steps() {
@@ -251,7 +278,11 @@ print_manual_chezmoi_steps() {
   fi
   say "  chezmoi diff  # optional: review changes before apply"
   say "  chezmoi apply"
-  say "  bash scripts/bootstrap terminal --set-shell  # optional: set zsh as default shell"
+  if (( use_bash )); then
+    say "  bash scripts/bootstrap terminal --bash --set-shell  # optional: set bash as default shell"
+  else
+    say "  bash scripts/bootstrap terminal --set-shell  # optional: set zsh as default shell"
+  fi
 }
 
 current_login_shell() {
@@ -280,13 +311,18 @@ current_login_shell() {
 set_shell_if_requested() {
   (( set_shell )) || return 0
 
-  have zsh || {
-    say "Skipping --set-shell: zsh is not installed."
+  hash -r 2>/dev/null || true
+
+  local shell_name="zsh"
+  (( use_bash )) && shell_name="bash"
+
+  have "$shell_name" || {
+    say "Skipping --set-shell: $shell_name is not installed."
     return 0
   }
 
   local target_shell
-  target_shell="$(command -v zsh)"
+  target_shell="$(command -v "$shell_name")"
 
   local current_shell
   if current_shell="$(current_login_shell)" && [[ "$current_shell" == "$target_shell" ]]; then

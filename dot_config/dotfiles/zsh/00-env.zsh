@@ -15,6 +15,13 @@ zsh_defer_or_run() {
   if (( $+functions[zsh-defer] )); then
     zsh-defer "$@"
   else
+    while [[ "${1:-}" == [-+]* ]]; do
+      case "$1" in
+        -t) shift 2 || break ;;
+        --) shift; break ;;
+        *) shift ;;
+      esac
+    done
     "$@"
   fi
 }
@@ -24,22 +31,4 @@ zsh_optional_eval() {
 
   init_script="$("$@" 2>/dev/null)" || return 0
   [[ -n "$init_script" ]] && eval "$init_script"
-}
-
-zsh_filter_path_patterns() {
-  local entry pattern
-  local -a filtered patterns
-
-  patterns=("$@")
-  for entry in "${path[@]}"; do
-    for pattern in "${patterns[@]}"; do
-      case "$entry" in
-        ${~pattern}) continue 2 ;;
-      esac
-    done
-    filtered+=("$entry")
-  done
-
-  path=("${filtered[@]}")
-  typeset -gU path PATH
 }

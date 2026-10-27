@@ -56,17 +56,17 @@ opendir() {
   local -a opener_arguments=()
 
   if dotfiles_is_wsl; then
-    if (( ${+commands[wslpath]} && ${+commands[explorer.exe]} )); then
+    if command -v wslpath >/dev/null 2>&1 && command -v explorer.exe >/dev/null 2>&1; then
       local windows_directory=""
       if windows_directory="$(command wslpath -w "$directory" 2>/dev/null)" &&
           [[ -n "$windows_directory" ]]; then
-        opener="${commands[explorer.exe]}"
+        opener="explorer.exe"
         opener_arguments=("$windows_directory")
       fi
     fi
 
-    if [[ -z "$opener" ]] && (( ${+commands[wslview]} )); then
-      opener="${commands[wslview]}"
+    if [[ -z "$opener" ]] && command -v wslview >/dev/null 2>&1; then
+      opener="wslview"
       opener_arguments=("$directory")
     fi
 
@@ -77,8 +77,8 @@ opendir() {
   else
     case "$OSTYPE" in
       darwin*)
-        if (( ${+commands[open]} )); then
-          opener="${commands[open]}"
+        if command -v open >/dev/null 2>&1; then
+          opener="open"
           opener_arguments=("$directory")
         else
           print -u2 -- "opendir: no supported directory opener found for macOS"
@@ -86,11 +86,11 @@ opendir() {
         fi
         ;;
       linux*)
-        if (( ${+commands[xdg-open]} )); then
-          opener="${commands[xdg-open]}"
+        if command -v xdg-open >/dev/null 2>&1; then
+          opener="xdg-open"
           opener_arguments=("$directory")
-        elif (( ${+commands[gio]} )); then
-          opener="${commands[gio]}"
+        elif command -v gio >/dev/null 2>&1; then
+          opener="gio"
           opener_arguments=(open "$directory")
         else
           print -u2 -- "opendir: no supported directory opener found for Linux"
@@ -104,7 +104,7 @@ opendir() {
     esac
   fi
 
-  command "$opener" "${opener_arguments[@]}" </dev/null >/dev/null 2>&1 &!
+  (command "$opener" "${opener_arguments[@]}" </dev/null >/dev/null 2>&1 &)
   return 0
 }
 
@@ -120,15 +120,16 @@ alias ard="aria2c --summary-interval=10 -x 3 --allow-overwrite=true -Z"
 # Quick-edit local override files (machine-specific, not in repo).
 # Defined as functions (not aliases) so syntax highlighters can recognize them.
 dotfiles_edit_file() {
+  setopt local_options sh_word_split
   local target="$1"
-  local parent="${target:h}"
+  local parent="${target%/*}"
   local editor="${VISUAL:-${EDITOR:-vi}}"
 
-  [[ -d "$parent" ]] || command mkdir -p "$parent"
-  ${=editor} "$target"
+  [[ "$parent" != "$target" && ! -d "$parent" ]] && command mkdir -p "$parent"
+  $editor "$target"
 }
 
-elocal()     { dotfiles_edit_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.zsh"; }
+elocal()     { dotfiles_edit_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.${dotfiles_shell:-zsh}"; }
 elocalenv()  { dotfiles_edit_file "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/local.env"; }
 egit()       { dotfiles_edit_file "$HOME/.gitconfig"; }
 egitignore() {
